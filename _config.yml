@@ -12,11 +12,11 @@ baseurl: "/wenzhongxu"         # for example, '/blog' if your blog hosted on 'ho
 
 # SNS settings
 RSS: false
-weibo_username:     huxpro
-zhihu_username:     huxpro
-github_username:    huxpro
+# weibo_username:     
+zhihu_username:     wenzhongsmile
+github_username:    wenzhongxu
 #twitter_username:  huxpro
-facebook_username:  huxpro
+# facebook_username:  huxpro
 
 
 
@@ -82,8 +82,8 @@ featured-condition-size: 1              # A tag will be featured if the size of 
 # Friends
 friends: [
     {
-        title: "Hux Blog",
-        href: "http://huangxuan.me"
+        title: "Wenzhong Blog",
+        href: "http://ssshuangxuan.me"
     },{
         title: "Foo",
         href: "#"
