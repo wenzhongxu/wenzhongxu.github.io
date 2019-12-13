@@ -4,3 +4,8 @@ node_modules
 */.DS_Store
 */*/.DS_Store
 *.sh
+.sass-cache
+.jekyll-cache
+.jekyll-metadata
+vendor
+
