@@ -1,0 +1,23 @@
+---
+layout:     post
+title:      "Welcome to Wenzhong Blog"
+subtitle:   " \"Hello World, Hello Blog\""
+date:       2019-12-15 20:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2019.jpg"
+tags:
+    - 生活
+---
+
+> “Yeah It's on. ”
+
+
+## 前言
+
+Wenzhong 的 Blog 今天开始正式挂牌上线啦。
+
+
+马上就是21世纪二十年代了，Wenzhong 终于有个自己的地方好好写自己的东西了。
+
+
+作为一个程序员，之前虽然也写博客，都是挂在CSDN和博客园上，偶尔也把内容发在自己粉丝少的可怜的公众号上。但是总觉得没有拥有自己专属域名，而且可以私人定制的的网站上酷。于是，悄摸摸的，我就把这个blog给搭起来啦。
