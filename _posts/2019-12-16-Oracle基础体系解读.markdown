@@ -14,7 +14,8 @@ tags:
 ## 基础概述
 
 Oracle的基础体系可以用一张图总结出来：
-[体系图(img/Oracle/OracleSystem.png)]
+<br>
+[体系图(/img/Oracle/OracleSystem.png)]
 
 依照这张体系图，可以对Oracle的体系简单描述如下四点：
 * Oracle是由数据库和实例组成的
