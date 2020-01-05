@@ -1,0 +1,151 @@
+---
+layout:     post
+title:      "编写高质量C#代码的建议"
+subtitle:   "《编写高质量C#的建议》学习笔记"
+date:       2019-12-16 12:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 学习笔记
+---
+
+$$ 目录 $$
+[TOC]
+
+
+
+
+
+## 一、基本语言要素
+### 1、正确操作字符串
+
+本条建议主要从两个方面讨论如何规避这类性能开销：
+    **1、确保尽量少的装箱**
+    **2、避免分配额外的内存空间**
+
+补充说明：装箱与拆箱含义
+
+    Sysyem.Object类型是所有内建类型的基类，所有的值类型都继承自System.Value，也就是说所有继承自System.ValueType的类型都是值类型，而其他类型都是引用类型。
+
+简单的说：
+
+1. 值类型：整型:Int；长整型:long；浮点型:float；字符型:char；布尔型:bool；枚举:enum；结构:struct；它们统一继承 自System.ValueType。
+2. 引用类型：数组，用户定义的类、接口、委托，object，字符串等。
+    例如： Object obj = 1;
+    这行语句将整型常量 1 赋给object类型的变量obj；
+    常量 1 是值类型，值类型是要放在栈上的，而object是引用类型，它需要放在堆上；
+    要把值类型放在堆上就需要执行一次装箱操作。
+    [装箱]这个值类型被复制并分配到托管堆，并把它转成引用类型obj,这一个过程将会造成性能损失。
+    同时，尽可能少用Array，它的ADD操作会将值类型变量转为引用类型，而泛型List则不会，它是一个增强版的Array，它可以直接添加值类型到List中。
+
+装箱之所以会带来性能损耗，因为它需要完成下面三个步骤：
+    1. 首先，会为值类型在托管堆中分配内存。除了值类型本身所分配的内存外，内存总量还要加上类型对象指针和同步块索引所占用的内存。
+    2. 将值类型的值复制到新分配的堆内存中。
+    3. 返回已经成为引用类型的对象的地址。
+
+
+string对象是个很特殊的对象，它一旦被赋值就不可改变。在运行时调用 System.String 类中的任何方法或进行任何运算（如“=”赋值，“+”拼接等），都会在内存中创建一个新的字符串对象，这也意味着要为该新对象分配新的内存空间。像下面的代码就会带来运行时的额外开销。
+```C#
+    private static void NewMethod1()
+    {
+        string s1 = "abc";
+        s1 = "123" + s1 + "456"; // 以上两行代码创建了3个字符串对象，并执行了一次 string.Contact 方法
+    }
+
+    private static void NewMethod2()
+    {
+        string re2 = 9 + "456"; // 该代码发生一次装箱，并调用一次 string.Contact 方法
+    }
+```
+
+而在以下代码中，字符串不会在运行时拼接字符串，而是会在编译时直接生成一个字符串。
+```C#
+    private static void NewMethod3()
+    {
+        string re3 = "123" + "abc" + "456"; // 该代码等效于 string re3 = "123abc456";
+
+        const string a = "t";
+        string re4 = "abc" + a; // 因为 a 是一个常量，所以该行代码等效于 string re3 = "abc" + "t";
+        // 最终等效于 string re4 = "abct";
+    }
+```
+
+由于使用 Sysyem.String 类会在某些场合带来明显的性能损耗，所以使用 StringBuilder 来弥补 String 的不足。
+StringBuilder 并不会重新创建一个 string 对象，它的效率源于预先以非托管的方式分配内存。如果StringBuilder没有预先定义长度， 则默认分配的长度是16.当StringBuilder字符长度小于等于16时，StringBuilder不会重新分配内存；当StringBuilder字符长度大于16小于32时，StringBuilder又会重新分配内存，使之成为16的倍数。如果预先判断字符串的长度将大于16，则可以为其设定一个更加合适的长度（如32）。
+StringBuilder重新分配内存时是按照上次的容量加倍进行分配的。
+StringBuilder指定的长度要合适，太小了，需要频繁分配内存；太大了，浪费空间。
+
+如下两种字符串拼接方式，哪种效率更高？
+1、 
+```C#
+private static void NewMethod4()
+{
+    string a = "t";
+    a += "e";
+    a += "s";
+    a += "t";
+}
+```
+2、 
+```C#   
+private static void NewMethod5()
+{
+    string a = "t";
+    string b = "e";
+    string c = "s";
+    string d = "t";
+    string result = a + b + c + d;
+}
+```
+
+两者效率都不高。事实上两者创建的字符串对象相等，且前者进行了3次 string.Contact 方法调用，比后者还多了两次。
+
+要完成这样的运行时字符串拼接（注意：运行时），更加的做法是使用 StringBuilder 类型：
+```C#
+    private static void NewMethod6()
+    {
+        string a = "t";
+        string b = "e";
+        string c = "s";
+        string d = "t";
+        StringBuilder sb = new StringBuilder(a);
+        sb.Append(b);
+        sb.Append(c);
+        sb.Append(d);
+        // 因为是运行时，所以没有使用下面的代码
+        // StringBuilder sb = new StringBuilder("t");
+        // sb.Append("e");
+        // sb.Append("s");
+        // sb.Append("t");
+        string result = sb.ToString();
+    }
+```
+
+还可以使用 string.Format 方法简化这种操作。string.Format 方法在内部使用 StringBuilder 进行字符串的格式化。
+```C#
+    private static void NewMethod7()
+    {
+        // 演示需要，定义四个变量
+        string a = "t";
+        string b = "e";
+        string c = "s";
+        string d = "t";
+        string.Format("{0}{1}{2}{3}", a, b, c, d);
+    }
+```
+
+另者：还有一个 StringBuffer 
+1、三者在执行速度方面的比较：**StringBuilder >StringBuffer > String**
+
+String一旦赋值或实例化后就不可更改，如果赋予新值将会重新开辟内存地址进行存储。而StringBuffer类使用append和insert等方法改变字符串值时只是在原有对象存储的内存地址上进行连续操作，减少了资源的开销。因此：当需要进行频繁修改字符串的操作时先建立StringBuffer类对象进行操作，将最后结果转化成String类对象返回，这样效率会高很多。StringBuffer(StringBuilder)其实可以看做“基本数据类型”String的包装类(Wrapper)，就像int与之对应的Integer等关系。StringBuffer有缓存的，如果你声明一个字符串只是接收传过来的参数，然后进行业务逻辑处理，那么假如你用很多个StringBuffer类型的对象，就比较浪费内存。这样用String就更好。
+    
+2、StringBuffer、StringBuilder和String一样，也用来代表字符串。
+
+String类是不可变类，任何对String的改变都 会引发新的String对象的生成；StringBuffer则是可变类，任何对它所指代的字符串的改变都不会产生新的对象。HashTable是线程安全的，很多方法都是synchronized方法，而HashMap不是线程安全的，但其在单线程程序中的性能比HashTable要高。StringBuffer和StringBuilder类的区别也是如此，他们的原理和操作基本相同，区别在于： StringBuffer支持并发操作，线性安全的，适合多线程中使用。StringBuilder不支持并发操作，线性不安全的，不适合多线程中使用。新引入的StringBuilder类不是线程安全的，但其在单线程中的性能比 StringBuffer高。
+    
+扩展知识：
+    
+    字符串前加@表示强制不转译。
+    如果字符串中有大量的\字符，而不是想用转义，那就写@来取消\转义字符。
+    还有就是字符串可以换行。
