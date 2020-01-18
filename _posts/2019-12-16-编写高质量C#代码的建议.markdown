@@ -11,10 +11,8 @@ tags:
 ---
 
 ### $$ 目录 $$
-[第一部分 基本语言要素](#firstChapter)
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[建议1 正确操作字符串](#suggestion1)
-
-</br></br></br></br></br></br></br></br></br></br></br></br></br>
+[第一部分 基本语言要素](#firstChapter)  
+[建议1 正确操作字符串](#suggestion1)
 
 
 <p id = "firstChapter"></p>
