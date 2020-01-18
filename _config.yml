@@ -15,8 +15,6 @@ RSS: false
 # weibo_username:     
 # zhihu_username:     
 github_username:    wenzhongxu
-#twitter_username:  huxpro
-# facebook_username:  huxpro
 csdn_username: xuwenzhong1994
 cnblog_username: wenzhong
 
@@ -82,21 +80,21 @@ featured-condition-size: 1              # A tag will be featured if the size of 
 
 
 # Friends
-friends: [
-    {
-        title: "Wenzhong Blog",
-        href: "http://wenzhongsmile.top"
-    },{
-        title: "Foo",
-        href: "#"
-    },{
-        title: "Bar",
-        href: "#"
-    },{
-        title: "Example Friends",
-        href: "#"
-    },{
-        title: "It helps SEO",
-        href: "#"
-    }
-]
+# friends: [
+#     {
+#         title: "Wenzhong Blog",
+#         href: "http://wenzhongsmile.top"
+#     },{
+#         title: "Foo",
+#         href: "#"
+#     },{
+#         title: "Bar",
+#         href: "#"
+#     },{
+#         title: "Example Friends",
+#         href: "#"
+#     },{
+#         title: "It helps SEO",
+#         href: "#"
+#     }
+# ]
