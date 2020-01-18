@@ -10,26 +10,28 @@ tags:
     - 学习笔记
 ---
 
-$$ 目录 $$
-[TOC]
+### $$ 目录 $$
+[第一部分 基本语言要素](#firstChapter)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[建议1 正确操作字符串](#suggestion1)
+
+</br></br></br></br></br></br></br></br></br></br></br></br></br>
 
 
+<p id = "firstChapter"></p>
+## 第一部分&nbsp;&nbsp;基本语言要素
 
-
-
-## 一、基本语言要素
-### 1、正确操作字符串
+<p id = "suggestion1"></p>
+### 建议1、正确操作字符串
 
 本条建议主要从两个方面讨论如何规避这类性能开销：
-    **1、确保尽量少的装箱**
-    **2、避免分配额外的内存空间**
+**1、确保尽量少的装箱**
+**2、避免分配额外的内存空间**
 
 补充说明：装箱与拆箱含义
 
     Sysyem.Object类型是所有内建类型的基类，所有的值类型都继承自System.Value，也就是说所有继承自System.ValueType的类型都是值类型，而其他类型都是引用类型。
 
 简单的说：
-
 1. 值类型：整型:Int；长整型:long；浮点型:float；字符型:char；布尔型:bool；枚举:enum；结构:struct；它们统一继承 自System.ValueType。
 2. 引用类型：数组，用户定义的类、接口、委托，object，字符串等。
     例如： Object obj = 1;
