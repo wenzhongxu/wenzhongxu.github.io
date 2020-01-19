@@ -10,9 +10,10 @@ tags:
     - 学习笔记
 ---
 
-### $$ 目录 $$
+###  目录
 [第一部分 基本语言要素](#firstChapter)  
 [建议1 正确操作字符串](#suggestion1)
+[建议2 使用默认的转型方法](#suggestion2)
 
 
 <p id = "firstChapter"></p>
@@ -149,3 +150,83 @@ String类是不可变类，任何对String的改变都 会引发新的String对�
     字符串前加@表示强制不转译。
     如果字符串中有大量的\字符，而不是想用转义，那就写@来取消\转义字符。
     还有就是字符串可以换行。
+
+
+<p id = "suggestion2"></p>
+### 建议2、使用默认转型方法
+
+> 在大部分情况下，当需要对FCL提供的类型进行转型时，都应该使用FCL提供的转型方法。
+
+转型的方法包括：
+1. 使用类型的转换运算符；
+   使用类型内部的一个方法（即函数）。分为隐式转换和显示转换。基元类型（指编译器直接支持的数据类型，即直接映射到FCL中的类型，包括 sbyte、byte、short、ushort、int、uint、long、ulong、char、float、double、bool、decimal、object、string）普遍提供了转换运算符，如
+   ```C#
+   int i = 0;
+   float j = 0;
+   j = i;
+   i = (int)j;
+   ```
+   用户自定义的类型也可以通过重载运算符的方式来提供这一类转换。如下代码所示
+   ```C#
+        class Program
+        {
+            static void Main(string[] args)
+            {
+                Ip ip = "192.168.0.23";
+                Console.WriteLine(ip.ToString());
+            }
+        }
+        
+        class Ip
+        {
+            IPAddress value;
+
+            public Ip(string ip)
+            {
+                value = IPAddress.Parse(ip);
+            }
+
+            public static implicit operator Ip(string ip)
+            {
+                Ip iptemp = new Ip(ip);
+                return iptemp;
+            }
+
+            public override string ToString()
+            {
+                return value.ToString();
+            }
+        }
+   ```
+
+2. 使用内置的Parse，TryParse，或者如ToString，ToDouble和ToDateTime等方法；
+3. 使用帮助类提供的方法；
+   可以使用如System.Convert类、System.BitConverter类来进行类型转换。System.Convert提供了将一个基元类型转换为其他基元类型的方法，如ToChar、ToBoolean方法等。System.Convert还支持将任何自定义类型转换为任何基元类型，只要自定义类型继承了IConvertible接口就可以。如上代码可以写作如下
+   ```C#
+        class Ip : IConvertible
+        {
+            // 省略
+            public bool ToBoolean(IFormatProvider provider)
+            {
+                throw new InvalidCastException("Ip-to-Boolean conversion is not supported.");
+            }
+
+            public string ToString(IFormatProvider provider)
+            {
+                return value.ToString();
+            }
+            // 省略
+        }
+   ```
+   继承 IConvertible 接口必须同时实现其他转型方法，如上文中的 ToBoolean，如果不支持此类型转换，则应该抛出一个 InvalidCastException，而不是 NotImplementedException。
+   System.BitConverter 提供了基元类型与字节数组之间相互转换的方法。
+4. 使用CLR支持的转型。
+   即上溯转型和下溯转型。实际上就是基类和子类之间的相互转换。如
+   ```C#
+    Animal animal;
+    Dog dog = new Dog();
+    animal = dog; // 隐式转换，因为Dog就是Animal
+    // dog = animal; // 编译不通过
+    dog = (Dog)animal; // 必须存在一个显示转换
+   ```
+
