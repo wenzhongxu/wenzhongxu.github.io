@@ -14,6 +14,17 @@ tags:
 #### [第一部分 基本语言要素](#firstChapter)  
 ##### [建议1 正确操作字符串](#suggestion1)
 ##### [建议2 使用默认的转型方法](#suggestion2)
+##### [建议3 区别对待强制转型as和is](#suggestion3)
+##### [建议4 TryParse比Parse好](#suggestion4)
+##### [建议5 使用int问号确保值类型可以为null](#suggestion5)
+##### [建议6 区别readonly和const的用法](#suggestion6)
+##### [建议7 将0值作为枚举的默认值](#suggestion7)
+##### [建议8 避免给枚举类型的元素提供显式的值](#suggestion8)
+##### [建议9 习惯重载运算符](#suggestion9)
+##### [建议10 创建对象时需要考虑是否实现比较器](#suggestion10)
+##### [建议11 区别对待==和Equals](#suggestion11)
+##### [建议12 重写Equals时也要重写GetHashCode](#suggestion12)
+##### [建议13 为类型输出格式化字符串](#suggestion13)
 
 
 <p id = "firstChapter"></p>
@@ -230,3 +241,834 @@ String类是不可变类，任何对String的改变都 会引发新的String对�
     dog = (Dog)animal; // 必须存在一个显示转换
    ```
 
+<p id = "suggestion3"></p>
+### 建议3、区别对待强制转型as和is
+对于强制转型 secondType = (SecondType)firstType; 可能意味着两件不同的事情：
+1. FirstType 和 SecondType 彼此依靠转换操作符来完成两个类型之间的转型。
+2. FirstType 是 SecondType 的基类。
+   
+类型之间存在强制转换时，要么是第一种关系，要么是第二种关系，不能同时既是继承关系，又提供转型符。
+
+##### 第一种情况
+```C#
+        class FirstType
+        {
+            public string Name { get; set; }
+        }
+
+        class SecondType
+        {
+            public string Name { get; set; }
+            public static explicit operator SecondType(FirstType firstType)
+            {
+                SecondType secondType = new SecondType() { Name = "转型自：" + firstType.Name };
+                return secondType;
+            }
+        }
+```
+在这种情况下，如果想转型成功则必须使用**强制转型，而不是使用as操作符**。
+```C#
+    FirstType firstType = new FirstType() { Name = "First Type" };
+    SecondType secondType = (SecondType)firstType; // 转型成功
+    // secondType = firstType as SecondType; // 编译期转型失败，编译不通过
+```
+为了满足更进一步的需求，需要写一个通用的方法，对FirstType或者SecondType做一些处理，如下:
+```C#
+    static void DoWithSomeType(object obj)
+    {
+        SecondType secondType = (SecondType)obj;
+    }
+```
+本段代码中，如果在调用方法时，传入的参数是一个 FirstType 对象，就会引发异常。
+这段代码与上段代相比，仅仅多了一层 object obj = firstType; 的转型。针对(SecondType)obj，编译器首先判断的是：SecondType 和 object 之间没有继承关系。在C#中，所有类型都是继承自 object，所以上面代码编译没问题。但编译器会自动产生代码来检查 obj在运行时是不是 SecondType，就绕过了转换操作符，转换便失败。因此建议：
+
+    如果类型之间都上溯到某个共同的基类，那么根据此基类进行的转型（即基类转型为子类本身）应该用as。子类与子类之间的转型，则应该提供转换操作符，以便进行强制转型。
+
+所以可以改造 DoWithSomeType 方法，使其更健壮：
+```C#
+        static void DoWithSomeType(object obj)
+        {
+            SecondType secondType = obj as SecondType;
+            if(secondType != null)
+            {
+                // ...
+            }
+        }
+```
+as操作符永远不会抛出异常，如果类型不匹配（被转换对象的运行时类型既不是所转换的目标类型，也不是其派生类型），或者转型的原对象为null，那么转型之后的值也为null。之前的 DoWithSomeType 方法会因为引发异常带来效率问题，而使用as后，就可以避免这种问题。
+
+##### 第二种情况
+FirstType 是 SecondType 的基类。此时既可以使用强制转型，也可以使用 as操作符
+```C#
+        class Program
+        {
+            static void Main(string[] args)
+            {
+                SecondType secondType = new SecondType() { Name = "Second Type" };
+                FirstType firstType1 = (FirstType)secondType;
+                FirstType firstType2 = secondType as FirstType;
+            }
+        }
+
+        class FirstType
+        {
+            public string Name { get; set; }
+        } 
+
+        class SecondType : FirstType
+        {
+
+        }
+```
+**即使可以使用强制转型，从效率角度来看，也建议使用as操作符。**
+
+###### is操作符
+
+DoWithSomeType的另一版本实现方法如下：
+```C#
+        static void DoWithSomeType(object obj)
+        {
+            if(obj is SecondType)
+            {
+                SecondType secondType = obj as SecondType;
+                // ...
+            }
+        }
+```
+这个版本没有上一个版本效率高，因为进行了两次类型检测。但是as操作符不能操作基元类型，如果涉及基元类型的算法，就需要通过is转型前的类型来进行判断，以避免转型失败。
+
+
+<p id = "suggestion4"></p>
+### 建议4、TryParse比Parse好
+
+Parse 方法会引发异常，TryParse 方法则不会返回异常，而是返回false，并将结果置为一个默认值。
+
+如果执行成功，两者的效率在同一个数量级，如果执行失败，则Parse要比TryParse低很多，所以，只有在考虑到Do方法会带来明显的性能损耗时，才建议使用TryParse。
+
+
+<p id = "suggestion5"></p>
+### 建议5、使用int问号确保值类型可以为null
+
+    可空类型和基元类型的互相转换
+
+基元类型提供了其对应的可空类型的隐式转换
+```C#
+    int? i = null;
+    int j = 0;
+    i = j;
+```
+
+反过来，可空类型不可隐式转换为对应的基元类型，正确的转换方式为：
+```C#
+    int? i = 123;
+    int j;
+    if(i.HasValue)
+    {
+        j = i.value;
+    }
+    else
+    {
+        j = 0;
+    }
+```
+以上代码可以简化为：
+```C#
+    int? i = 123;
+    int j = i ?? 0;
+```
+
+<p id = "suggestion6"></p>
+### 建议6、区别readonly和const的用法
+
+###### readonly和const的本质区别如下
+1. const是个编译期常量，readonly是个运行时常量；
+2. const只能修饰基元类型、枚举类型或字符串类型，readonly没有限制。
+
+###### 关于第一点区别
+因为const是个编译期常量，所以它天然就是静态的，不能再为它加一个static修饰符。
+之所以说const变量的效率高，是因为经过编译器编译后，我们在代码中引用const变量的地方会用const变量所对应的实际值来代替。如：
+    Console.WriteLine(ConstValue); 和 Console.WriteLine(100);生成的IL代码是一样的。
+
+readonly变量是运行时变量，其赋值行为发生在运行时。readonly的全部意义在于，它在运行时第一次被赋值后将不可以被改变。
+
+1. 对于值类型变量，值本身不可改变；
+2. 对于引用类型变量，引用本身（相当于指针）不可改变。
+
+> **值类型变量**
+```C#
+        class Sample
+        {
+            public readonly int ReadOnlyValue;
+            public Sample(int value)
+            {
+                ReadOnlyValue = value;
+            }
+        }
+```
+
+Sample的实例ReadOnlyValue在构造方法中被赋值后就不可以改变，下面的代码将不会编译通过：
+```C#
+        Sample sample = new Sample(200);
+        sample.ReadOnlyValue = 300; //无法对只读的字段赋值（构造函数或变量初始值指定项中除外）
+```
+
+> **引用类型变量**
+```C#
+        class Sample2
+        {
+            public readonly Student ReadOnlyValue;
+            public Sample2(Student value)
+            {
+                ReadOnlyValue = value;
+            }
+        }
+```
+
+Sample2的ReadOnlyValue是一个引用类型变量，赋值后，变量不能再指向任何其他Student实例，下面的代码将不会编译通过
+```C#
+        Sample2 sample2 = new Sample2(new Student() { Age = 10 });
+        sample2.ReadOnlyValue = new Student() { Age = 20 };
+        //无法对只读的字段赋值（构造函数或变量初始值指定项中除外）
+```
+引用本身不可改变，但是引用所指的实例的值是可以改变的，下面的代码是与允许的
+```C#
+        Sample2 sample2 = new Sample2(new Student() { Age = 10 });
+        sample2.ReadOnlyValue.Age = 20;
+```
+
+readonly所代表的运行时含义有一个重要的作用，就是可以为每个类的实例指定一个readonly的变量。以Sample这个类为例，可以在运行时生成多个实例，而同时又可以为每个实例生成自己的readonly变量。如下：
+```C#
+        Sample sample1 = new Sample(100);
+        Sample sample2 = new Sample(200);
+        Sample sample3 = new Sample(300);
+```
+
+<p id = "suggestion7"></p>
+### 建议7、将0值作为枚举的默认值
+
+> 允许使用的枚举类型有byte、sbyte、short、ushort、int、uint、long和ulong。应该始终将0值作为枚举类型的默认值。这样做不是因为允许使用的枚举类型声明时的默认值时0值，而是有工程上的意义。
+
+如果一个代表星期的枚举类Week，我们会想当然地认为它应该有7个元素，代码如下：
+```C#
+    enum Week
+    {
+        Monday = 1,
+        Tuesday = 2,
+        Wednesday = 3,
+        Thursday = 4,
+        Friday = 5,
+        Saturday = 6,
+        Sunday = 7
+    }
+```
+
+如果不小心写出如下代码：
+```C#
+    class Program
+    {
+        static Week week;
+        static void Main(string[] args)
+        {
+            Console.WriteLine(week);
+        }
+    }
+```
+
+    此时输出为： 0
+
+Week看上去多了第8个值，但是这段代码没有引发异常。所以应该始终为枚举的0值指定默认值。在上面的枚举类型Week中，可以将显式为元素赋值去掉，编译器会自动从0值开始计数，然后逐个为元素的值+1。
+
+**注意**
+    
+    除了上文说的Week的第8个值外，其实，如果枚举类型的元素类型为整型，那么还可以将其他整型的值赋值给Week：
+
+    week = (Week)9;
+    Console.WriteLine(week);
+
+    代码输出：9。
+
+
+<p id = "suggestion8"></p>
+### 建议8、避免给枚举类型的元素提供显式的值
+
+> 一般情况下，没有必要给枚举类型的元素提供显式的值。创建枚举的理由之一，就是为了代替使用实际的数值。
+不正确地为枚举类型的元素设定显式的值，会带来意想不到的错误。
+
+如果为建议7的枚举类型Week增加一个元素，代码如下
+```C#
+    enum Week
+    {
+        Monday = 1,
+        Tuesday = 2,
+        ValueTemp,
+        Wednesday = 3,
+        Thursday = 4,
+        Friday = 5,
+        Saturday = 6,
+        Sunday = 7
+    }
+
+    Week week = Week.ValueTemp;
+    Console.WriteLine(week);
+    Console.WriteLine(week == Week.Wednesday);
+```
+
+    输出为：
+    Wednesday
+    True
+
+上个建议中讲过，如果没有为元素显式赋值，编译器会逐个为元素的值+1。
+当编译器发现元素ValueTemp的时候，它会自动在Tuesday = 2的基础上 +1，所以，实际ValueTemp的值和Wednesday的值都是3。而枚举本身所包括的枚举元素都是值类型，所以产生了上面的输出。
+
+###### 注意
+本建议也有例外。例如，当为一个枚举类型指定System.FlagsAttribute属性时，就意味着可以对这些值执行 AND、OR、NOT、和XOR按位运算，这样一来，就要求枚举的每个元素的值都是2的若干次幂，指数依次递增。如Week的版本就应该为：
+```C#
+    [Flags]
+    enum Week
+    {
+        None = 0x0,
+        Monday = 0x1,
+        Tuesday = 0x2,
+        Wednesday = 0x4,
+        Thursday = 0x8,
+        Friday = 0x10,
+        Saturday = 0x20,
+        Sunday = 0x40
+    }
+
+    class MyClass
+    {
+        Week week = Week.Thursday | Week.Sunday;
+    }
+```
+
+
+<p id = "suggestion9"></p>
+### 建议9、习惯重载运算符
+
+在构建自己的类型时，应该始终考虑该类型是否可以用于运算符重载。如果考虑类型Salary，下面这段代码就不是那么舒服了:
+```C#
+    Salary mikeIncome = new Salary() { RMB = 22 };
+    Salary roseIncome = new Salary() { RMB = 33 };
+    Salary familyIncome = Salary.Add(mikeIncome, roseIncome);
+```
+应该使类型支持:
+```C#
+    Salary familyIncome = mikeIncome + roseIncome;
+```
+
+重载之后的版本应像以下形式：
+```C#
+    class Salary
+    {
+        public int RMB { get; set; }
+
+        public static Salary operator +(Salary s1, Salary s2)
+        {
+            s2.RMB += s1.RMB;
+            return s2;
+        }
+    }
+```
+
+<p id = "suggestion10"></p>
+### 建议10、创建对象时需要考虑是否实现比较器
+
+有对象的地方就会存在比较，如果创建的对象需要支持排序，这个时候，接口IComparable就会起作用，代码如下：
+```C#
+    class Salary : IComparable
+    {
+        public string Name { get; set; }
+        public int BaseSalary { get; set; }
+        public int Bonus { get; set; }
+
+        #region IComparable 成员
+
+        public int CompareTo(object obj)
+        {
+            Salary staff = obj as Salary;
+            if(BaseSalary > staff.BaseSalary)
+            {
+                return 1;
+            }
+            else if(BaseSalary == staff.BaseSalary)
+            {
+                return 0;
+            }
+            else
+            {
+                return -1;
+            }
+            // return BaseSalary.CompareTo(staff.BaseSalary);
+        }
+
+        #endregion
+    }
+```
+**注意**
+上面代码中CompareTo方法有一条注释的代码，其实本方法完全可以使用该注释代码代替，因为利用了整型的默认比较方法。
+
+此处未使用本注释代码，是为了更好地说明比较器的工作原理。
+
+实现了接口IComparable后，就可以根据BaseSalary对Salary进行排序了，代码如下：
+```C#
+    ArrayList companySalary = new ArrayList();
+    companySalary.Add(new Salary() { Name = "Mike", BaseSalary = 3000 });
+    companySalary.Add(new Salary() { Name = "Rose", BaseSalary = 2000 });
+    companySalary.Add(new Salary() { Name = "Jeffry", BaseSalary = 1000 });
+    companySalary.Add(new Salary() { Name = "Steve", BaseSalary = 4000 });
+    companySalary.Sort();
+    foreach(Salary item in companySalary)
+    {
+        Console.WriteLine(item.Name + "\t BaseSalary: " + item.BaseSalary.ToString());
+    }
+```
+
+    上面代码输出如下:
+    Jeffry BaseSalary: 1000
+    Rose BaseSalary: 2000
+    Mike BaseSalary: 3000
+    Steve BaseSalary: 4000
+
+如果不想以BaseSalary进行排序，而是以Bonus进行排序，接口IComparer的作用就体现出来了，可以使用IComparer来实现一个自定义的比较器。如下所示：
+```C#
+    class BonusComparer : IComparer
+    {
+        #region IComparer 成员
+
+        public int Compare(object x, object y)
+        {
+            Salary s1 = x as Salary;
+            Salary s2 = y as Salary;
+            return s1.Bonus.CompareTo(s2.Bonus);
+        }
+
+        #endregion
+    }
+```
+我们在排序的时候为Sort方法提供此比较器，代码如下：
+```C#
+    ArrayList companySalary = new ArrayList();
+    companySalary.Add(new Salary() { Name = "Mike", BaseSalary = 3000, Bonus = 1000 });
+    companySalary.Add(new Salary() { Name = "Rose", BaseSalary = 2000, Bonus = 4000  });
+    companySalary.Add(new Salary() { Name = "Jeffry", BaseSalary = 1000, Bonus = 6000  });
+    companySalary.Add(new Salary() { Name = "Steve", BaseSalary = 4000, Bonus = 3000  });
+    companySalary.Sort(new BonusComparer()); // 提供一个非默认的比较器
+    foreach(Salary item in companySalary)
+    {
+        Console.WriteLine(String.Format("Name:{0} \tBaseSalary:{1} \tBonus:{2}", item.Name, item.BaseSalary, item.Bonus));
+    }
+```
+
+    输出结果如下：
+    Name:Mike BaseSalary:3000 Bonus:1000
+    Name:Steve BaseSalary:4000 Bonus:3000
+    Name:Rose BaseSalary:2000 Bonus:4000
+    Name:Jeffry BaseSalary:1000 Bonus:6000
+
+上面的代码中使用了一个已经不建议使用的集合类ArrayList（当泛型出来后，就建议尽量不使用所有非泛型集合类）。至于原因，注意查看代码中的Compare函数，如：
+```C#
+    public int Compare(object x, object y)
+    {
+        Salary s1 = x as Salary;
+        Salary s2 = y as Salary;
+        return s1.Bonus.CompareTo(s2.Bonus);
+    }
+```
+这个函数进行了转型，这是会影响性能的。如果集合中有成千上万个复杂的实体对象，在排序的时候所耗费掉的性能是可观的；而泛型的出现，可以避免运行时转型。
+因此，以上代码中的ArrayList，应该换成List<T>，对应的，我们就该实现IComparable<T>和IComparer<T>。最终代码如下：
+```C#
+    static void Main(string[] args)
+    {
+        List<Salary> companySalary = new List<Salary>()
+        {
+            new Salary() { Name = "Mike", BaseSalary = 3000, Bonus = 1000 },
+            new Salary() { Name = "Rose", BaseSalary = 2000, Bonus = 4000 },
+            new Salary() { Name = "Jeffry", BaseSalary = 1000, Bonus = 6000 },
+            new Salary() { Name = "Steve", BaseSalary = 4000, Bonus = 3000 }
+        }
+        companySalary.Sort(new BonusComparer()); // 提供一个非默认的比较器
+        foreach(Salary item in companySalary)
+        {
+            Console.WriteLine(String.Format("Name:{0} \tBaseSalary:{1} \tBonus:{2}", item.Name, item.BaseSalary, item.Bonus));
+        }
+    }
+
+    class Salary : IComparable<Salary>
+    {
+        public string Name { get; set; }
+        public int BaseSalary { get; set; }
+        public int Bonus { get; set; } 
+
+        #region IComparable<Salary> 成员
+
+        public int CompareTo(Salary other)
+        {
+            return BaseSalary.CompareTo(other.BaseSalary);
+        }
+
+        #endregion
+
+    }
+
+    class BonusComparer : IComparer<Salary>
+    {
+        #region IComparer<Salary> 成员
+
+        public int CompareTo(Salary x, Salary y)
+        {
+            return x.Bonus.CompareTo(y.Bonus);
+        }
+
+        #endregion
+
+    }
+```
+
+<p id = "suggestion11"></p>
+### 建议11、区别对待==和Equals
+
+> CLR中将“相等性”分为两类：“值相等性”和“引用相等性”。
+
+如果用来比较的两个变量所包含的数值相等，那么将其定义为“值相等性”；如果比较的两个变量引用的是内存中的同一个对象，那么将其定义为“引用相等性”。
+
+无论是操作符“==”还是方法“Equals”，都倾向于表达这样一个原则：
+    **对于值类型，如果类型的值相等，就应该返回True。**
+    **对于引用类型，如果类型指向同一个对象，则返回True。**
+下面的代码输出所遵循的就是以上原则：
+```C#
+    static void ValueTypeOPEquals()
+    {
+        int i = 1;
+        int j = 1;
+        // True 
+        Console.WriteLine(i == j);
+        j = i;
+        // True
+        Console.WriteLine(i == j);
+    }
+
+    static void ReferenceTypeOPEquals()
+    {
+        object a = 1;
+        object b = 1;
+        // False
+        Console.WriteLine(a == b);
+        b = a;
+        // True
+        Console.WriteLine(a == b);
+    }
+
+    static void ValueTypeEquals()
+    {
+        int i = 1;
+        int j = 1;
+        // True
+        Console.WriteLine(i.Equals(j));
+        j = i;
+        // True
+        Console.WriteLine(i.Equals(j));
+    }
+
+    static void ReferenceTypeEquals()
+    {
+        object a = new Person("NB123");
+        object b = new Person("NB123");
+        // False
+        Console.WriteLine(a.Equals(b));
+        b = a;
+        // True
+        Console.WriteLine(a.Equals(b));
+    }
+```
+
+同时，无论是操作符“==”还是“Equals”方法都是**可以被重载**的。比如，对于string这样一个特殊的引用类型，微软觉得它的现实意义更接近于值类型，所以在FCL中，string的比较被重载为针对“类型的值”的比较，而不是针对“引用本身”的比较。
+
+从实际上说，很多自定义的类型（尤其是自定义的引用类型），如上例中的Person，会和string存在比较接近的情况，只要两者的IDCode相等，就认为两者是同一个人，这个时候就要重载Equals这个方法，代码如下所示：
+```C#
+    class Person
+    {
+        public string IDCode { get; private set; }
+
+        public Person(string idCode)
+        {
+            this.IDCode = idCode;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return IDCode == (obj as Person).IDCode;
+        }
+    }
+```
+
+这时，再通过Equals去比较两个具有相同IDCode的Person对象的值，返回的就会是True，代码如下所示：
+```C#
+    object a = new Person("NB123");
+    object b = new Person("NB123");
+    // False
+    Console.WriteLine(a == b);
+    // True
+    Console.WriteLine(a.Equals(b));
+```
+
+这里，再引出操作符“==”和“Equals”方法之间的一点区别。
+
+    一般来说，对于引用类型，我们要定义“值相等性”，应该仅仅去重载Equals方法，同时让“==”表示“引用相等性”。
+
+###### 注意
+由于操作符“==” 和  “Equals” 方法从语法实现上来说，都可以被重载为表示“值相等性”和“引用相等性”。所以，为了明确有一种方法肯定比较的是“引用相等性”，FCL中提供了Object.ReferenceEquals方法。
+该方法比较的是：**两个实例是否是同一个实例**。
+
+
+<p id = "suggestion12"></p>
+### 建议12、重写Equals时也要重写GetHashCode
+
+除非考虑到自定义类型会被用作基于散列的集合的键值；否则，不建议重写Equals方法，因为会带来一系列的问题。
+
+如果编写上一个建议中的Person这个类型，编译器会提示这样的信息：
+
+    “重写 Object.Equals(object o) 但不重写 Object.GetHashCode()” 
+    
+如果重写Equals方法的时候不重写 Object.GetHashCode方法，在使用如FCL中的Dictionary类时，可能隐含一些潜在的bug。
+
+还是针对上一个建议中的Person进行编码，代码如下所示：
+```C#
+    static Dictionary<Person, PersonMoreInfo> PersonValues = new Dictionary<Person, PersonMoreInfo>();
+    
+    static void Main(string[] args)
+    {
+        AddAPerson();
+        Person mike = new Person("NB123");
+        // Console.WriteLine(mike.GetHashCode());
+        Console.WriteLine(PersonValues.ContainsKey(mike));
+    }
+
+    static void AddAPerson()
+    {
+        Person mike = new Person("NB123");
+        PersonMoreInfo mikeValue = new PersonMoreInfo() { SomeInfo = "Mike's info" };
+        PersonValues.Add(mike, mikeValue);
+        // Console.WriteLine(mike.GetHashCode());
+        Console.WriteLine(PersonValues.ContainsKey(mike));
+    }
+```
+
+    本段代码输出如下：
+    True
+    False
+
+理论上来说，在上一个建议中我们已经重写了Person的Equals方法；也就是说，在AddAPerson方法中的mike和Main方法中的mike属于“值相等”。于是，将该“值”作为key放入Dictionary中，再在某处根据mike将mikeValue取出来，这会是理所当让的事情。可是，从上面的代码中我们发现，针对同一个实例，这种结论是正确的，若是针对不同的mike实例，这种结果就有问题了。
+    
+基于键值的集合（如上面的Dictionary）会根据key值来查找Value值。CLR内部会优化这种查找，实际上，最终是根据Key值的HashCode来查找Value值。代码运行的时候，CLR首先会调用Person类型的GetHashCode，由于发现Person没有实现GetHashCode，所以CLR最终会调用Object的GetHashCode方法。将上面代码中的两行注释代码去掉，运行程序得到输出，我们会发现，Main方法和AddAPerson方法中的两个mike的HashCode是不同的。
+
+Object为所有的CLR类型都提供了GetHashCode的默认实现。每new一个对象，CLR都会为该对象生成一个固定的整型值，该整型值在对象的生存周期内不会改变，而该对象默认的GetHashCode实现就是对该整型值求HashCode。所以，上面代码中，两个mike对象虽然属性值都一致，但是他们默认实现的HashCode不一致，这就导致Dictionary中出现异常的行为。若要修正该问题，就必须重写GetHashCode方法。
+
+Person类的一个简单的重写可以如下：
+```C#
+    public override int GetHashCode()
+    {
+        return this.IDCode.GetHashCode();
+    }
+```
+
+此时再运行开始时的代码输出，就会发现两者的HashCode是一致的，而Dictionary也会找到相应的键值，输出：True。
+
+Person类的IDCode属性是一个只读属性。从语法特性本身来讲，可以将IDCode设置为可写；然而从现实的角度考虑，一个“人”一旦踏入社会，其IDCode就不应该改变，如果要改变，就相当于是另外一个人了。所以，我们应该只实现该IDCode的只读属性。同理，GetHashCode方法也应该基于那些只读的属性或特性生成HashCode。
+
+GetHashCode方法还存在另外一个问题，它永远只返回一个整型类型，而整型类型的容量显然无法满足字符串的容量，以下的例子就能产生两个同样的HashCode：
+```C#
+    string str1 = "NB903100006";
+    string str2 = "NB904140001";
+    Console.WriteLine(str1.GetHashCode());
+    Console.WriteLine(str2.GetHashCode());
+```
+为了减少两个不同类型之间根据字符串产生相同的HashCode的几率，一个稍作改进版本的GetHashCode方法如下：
+```C#
+    public override int GetHashCode()
+    {
+        return (System.Reflection.MethodBase.GetCurrentMethod().DeclaringType.FullName + "#" + this.IDCode).GetHashCode();
+    }
+```
+注意：重写Equals方法的同时，也应该实现一个类型安全的接口IEquatable<T>，所以Person类型的最终版本应该如下所示：
+```C#
+    class Person : IEquatable<Person>
+    {
+        public string IDCode { get; private set; }
+
+        public Person(string idCode)
+        {
+            this.IDCode = idCode;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return IDCode == (obj as Person).IDCode;
+        }
+
+        public override int GetHashCode()
+        {
+            return (System.Reflection.MethodBase.GetCurrentMethod().DeclaringType.FullName + "#" + this.IDCode).GetHashCode();
+        }
+
+        public bool Equals(Person other)
+        {
+            return IDCode == other.IDCode;
+        }
+    }
+```
+
+<p id = "suggestion13"></p>
+### 建议13、为类型输出格式化字符串
+
+有两种方法可以为类型提供格式化的字符串输出。一种是意识到类型会产生格式化字符串输出，于是让类型继承接口IFormattable。
+
+这是一种主动实现的方式，要求开发者可以预见类型在格式化方面的要求。第二种就是，类型的使用者为类型自定义格式化器。
+
+最简单的字符串输出是为类型重写ToString方法，如果没有为类型重写该方法，默认会调用Object的ToString方法，它会返回当前类型的类型名称。
+
+但即使是重写了ToString方法，提供的字符串输出也是非常单一的，而通过实现IFormattable接口的ToString方法，可以让类型根据用户的输入而格式化输出。
+
+如下面这个类型Person，本身提供了属性FirstName和LastName。现在根据中文和英文习惯，提供ToString方法要支持输出“Hu Jessica”或“Jessica Hu”，
+实现代码如下：
+```C#
+    class Person : IFormattable
+    {
+        public string IDCode { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        // 实现接口IFormattable的方法ToString
+        public string ToString(string format, IFormatProvider formatProvider)
+        {
+            switch(format)
+            {
+                case "Ch":
+                    return this.ToString();
+                case "Eg":
+                    return string.Format("{0} {1}", FirstName, LastName);
+                default:
+                    return this.ToString();
+            }
+        }
+
+        // 重写Object.ToString()
+        public override string ToString()
+        {
+            return string.Format("{0} {1}", LastName, FirstName);
+        }
+    }
+```
+这种方式是在意识到类型会存在格式化字符串输出方面的需求时，提前为类型继承了接口IFormattable。如果类型本身没有提供格式化输出的功能，这个时候，格式化器就派上了用场。
+
+格式化器的好处就是可以根据需求的变化，随时增加或者修改它。针对Person的格式化器的实现为：
+```C#
+    class PersonFormatter : IFormatProvider, ICustomFormatter
+    {
+        #region IFormatProvider 成员
+
+        public object GetFormat(Type formatType)
+        {
+            if(formatType == typeof(ICustomFormatter))
+                return this;
+            else
+                return null;
+        }
+
+        #endregion
+
+        #region ICustomFormatter 成员
+
+        public string Format(string format, object arg, IFormatProvider formatProvider)
+        {
+            Person person = arg as Person;
+            if(person == null)
+            {
+                return string.Empty;
+            }
+
+            switch(format)
+            {
+                case "Ch":
+                    return string.Format("{0} {1}", person.LastName, person.FirstName);
+                case "Eg":
+                    return string.Format("{0} {1}", person.FirstName, person.LastName);
+                case "ChM":
+                    return string.Format("{0} {1} : {2}", person.LastName, person.FirstName. person.IDCode);
+                default:
+                    return string.Format("{0} {1}", person.FirstName, person.LastName);
+            }
+        }
+
+        #endregion
+    }
+```
+
+一个典型的格式化器应该继承接口IFormatProvider和ICustomFormatter，所以应该像下面这样调用格式化器：
+```C#
+    Person person = new Person() { FirstName = "Jessica", LastName = "Hu", IDCode = "NB123" };
+    Console.WriteLine(person.ToString());
+    PersonFormatter pFormatter = new PersonFormatter();
+    Console.WriteLine(pFormatter.Format("Ch", person, null));
+    Console.WriteLine(pFormatter.Format("Eg", person, null));
+    Console.WriteLine(pFormatter.Format("ChM", person, null));
+```
+
+    输出为：
+    ConsoleApplication4.Person
+    Hu Jessica
+    Jessica Hu
+    Hu Jessica : NB123
+
+本示例演示了如果没有重写Object.ToString方法，类型会输出类型名称。
+
+实际上，如果对IFormattable的ToString方法稍作修改，就能让格式化输出在语法上支持更多的调用方式。注意看最终版本中ToString方法的switch结构的default部分：
+```C#
+    class Person : IFormattable
+    {
+        public string IDCode { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+
+        // 实现接口IFormattable的方法ToString
+        public string ToString(string format, IFormatProvider formatProvider)
+        {
+            switch(format)
+            {
+                case "Ch":
+                    return this.ToString();
+                case "Eg":
+                    return string.Format("{0} {1}", FirstName, LastName);
+                default:
+                    // return this.ToString();
+                    ICustomFormatter customFormatter = formatProvider as ICustomFormatter;
+                    if(customFormatter == null)
+                    {
+                        return this.ToString();
+                    }
+                    return customFormatter.Format(format, this, null);
+            }
+        }
+
+        // 重写Object.ToString()
+        public override string ToString()
+        {
+            return string.Format("{0} {1}", LastName, FirstName);
+        }
+    }
+```
+
+最终，调用者的代码能够支持如下所示的语法：
+```C#
+    Person person = new Person() { FirstName = "Jessica", LastName = "Hu", IDCode = "NB123" };
+    Console.WriteLine(person.ToString());
+    PersonFormatter pFormatter = new PersonFormatter();
+    // 第一类格式化输出语法
+    Console.WriteLine(pFormatter.Format("Ch", person, null));
+    Console.WriteLine(pFormatter.Format("Eg", person, null));
+    Console.WriteLine(pFormatter.Format("ChM", person, null));
+    // 第二类格式化输出语法，更简洁
+    Console.WriteLine(person.ToString("Ch", pFormatter));
+    Console.WriteLine(person.ToString("Eg", pFormatter));
+    Console.WriteLine(person.ToString("ChM", pFormatter));
+```
