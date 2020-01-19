@@ -11,9 +11,9 @@ tags:
 ---
 
 ###  目录
-[第一部分 基本语言要素](#firstChapter)  
-[建议1 正确操作字符串](#suggestion1)
-[建议2 使用默认的转型方法](#suggestion2)
+#### [第一部分 基本语言要素](#firstChapter)  
+##### [建议1 正确操作字符串](#suggestion1)
+##### [建议2 使用默认的转型方法](#suggestion2)
 
 
 <p id = "firstChapter"></p>
