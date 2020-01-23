@@ -1,7 +1,7 @@
 ---
 layout:     post
-title:      "编写高质量C#代码的建议"
-subtitle:   "《编写高质量C#的建议》学习笔记"
+title:      "编写高质量C#代码的建议 第一部分"
+subtitle:   "《编写高质量C#的建议》学习笔记 第一部分 基本语言要素"
 date:       2019-12-16 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"
@@ -10,8 +10,7 @@ tags:
     - 学习笔记
 ---
 
-###  目录
-#### [第一部分 基本语言要素](#firstChapter)  
+### [第一部分 基本语言要素](#firstChapter)  
 ##### [建议1 正确操作字符串](#suggestion1)
 ##### [建议2 使用默认的转型方法](#suggestion2)
 ##### [建议3 区别对待强制转型as和is](#suggestion3)
@@ -25,6 +24,8 @@ tags:
 ##### [建议11 区别对待==和Equals](#suggestion11)
 ##### [建议12 重写Equals时也要重写GetHashCode](#suggestion12)
 ##### [建议13 为类型输出格式化字符串](#suggestion13)
+##### [建议14 正确实现浅拷贝和深拷贝](#suggestion14)
+##### [建议15 使用dynamic来简化反射实现](#suggestion15)
 
 
 <p id = "firstChapter"></p>
@@ -1072,3 +1073,238 @@ GetHashCode方法还存在另外一个问题，它永远只返回一个整型类
     Console.WriteLine(person.ToString("Eg", pFormatter));
     Console.WriteLine(person.ToString("ChM", pFormatter));
 ```
+
+<p id = "suggestion14"></p>
+###建议14、正确实现浅拷贝和深拷贝
+
+    为对象创建副本的技术称为拷贝（也叫克隆）。分为浅拷贝和深拷贝。
+
+###### 浅拷贝
+    将对象中的所有字段复制到新的对象（副本）中。其中，值类型字段的值被复制到副本中后，在副本中的修改不会影响到源对象对应的值。而引用类型的字段被复制到副本中的是引用类型的引用，而不是引用的对象，在副本中对引用类型的字符值做修改会影响到源对象本身。
+    
+###### 深拷贝
+    将对象中的所有字段复制到新的对象中。无论是对象的值类型字段，还是引用类型字段，都会被重新创建并赋值，对于副本的修改，不会影响到源对象本身。
+
+无论是浅拷贝还是深拷贝，微软都建议用类型继承ICloneable接口的方式明确告诉调用者：该类型可以被拷贝。当然，ICloneable接口只提供了一个声明为Clone的方法，可以根据需要在Clone方法内实现浅拷贝或深拷贝。
+
+一个简单的浅拷贝的实现代码如下所示：
+```C#
+    class Employee : ICloneable
+    {
+        public string IDCode { get; set; }
+        public int Age { get; set; }
+        public Department Department { get; set; }
+
+        #region ICloneable 成员
+
+        public object Clone()
+        {
+            return this.MemberwiseClone();
+        }
+
+        #endregion
+    
+    }
+
+    class Department
+    {
+        public string Name { get; set; }
+        public override string ToString()
+        {
+            return this.Name;
+        }
+    }
+```
+
+调用方代码如下：
+```C#
+    Employee mike = new Employee() { IDCode = "NB123", Age = 30, Department = new Department() { Name = "Dep1" } };
+    Employee rose = mike.Clone() as Employee;
+    Console.WriteLine(rose.IDCode);
+    Console.WriteLine(rose.Age);
+    Console.WriteLine(rose.Department);
+    Console.WriteLine("开始改变mike的值：");
+    mike.IDCode = "NB456";
+    mike.Age = 60;
+    mike.Department.Name = "Dep2";
+    Console.WriteLine(rose.IDCode);
+    Console.WriteLine(rose.Age);
+    Console.WriteLine(rose.Department);
+```
+输出为：
+
+    NB123
+    30
+    Dep1
+    开始改变mike的值：
+    NB123
+    30
+    Dep2
+
+注意到Employee的IDCode属性时string类型。理论上string类型是引用类型，但是由于该引用类型的特殊性，Object.MemberwiseClone方法仍旧为其创建了副本。也就是说，在浅拷贝过程，我们应该将字符串看成是值类型。
+
+Employee的Department属性是一个引用类型，所以，如果改变了源对象mike中的值，副本rose的值也会随之一起变动。
+
+Employee的深拷贝有多种实现方法，最简单的就是手动对字段逐个赋值，但如果类型的字段发生变化或有增减，拷贝方法也要发生相应变化，建议使用序列化的形式来进行深拷贝。一个简单的实现代码如下：
+```C#
+    class Employee : ICloneable
+    {
+        public string IDCode { get; set; }
+        public int Age { get; set; }
+        public Department Department { get; set; }
+
+        #region ICloneable 成员
+
+        public object Clone()
+        {
+            using(Stream objectStream = new MemoryStream())
+            {
+                IFormatter formatter = new BinaryFormatter();
+                formatter.Serialize(objectStream, this);
+                objectStream.Seek(0, SeekOrigin.Begin);
+                return formatter.Deserialize(objectStream) as Employee;
+            }
+        }
+
+        #endregion
+    
+    }
+```
+
+使用浅拷贝中的调用者代码，输出为：
+
+    NB123
+    30
+    Dep1
+    开始改变mike的值：
+    NB123
+    30
+    Dep1
+
+由于接口ICloneable只有一个模棱两可的Clone方法，所以，如果要在一个类中同时实现深拷贝和浅拷贝，只能实现两个额外的方法，声明为DeepClone和Shallow。
+
+Employee的最终版本应该像如下形式：
+```C#
+    [Serializable]
+    class Employee : ICloneable
+    {
+        public string IDCode { get; set; }
+        public int Age { get; set; }
+        public Department Department { get; set; }
+
+        #region ICloneable 成员
+
+        public object Clone()
+        {
+            return this.MemberwiseClone();
+        }
+
+        #endregion
+
+        public Employee DeepClone()
+        {
+            using(Stream objectStream = new MemoryStream())
+            {
+                IFormatter formatter = new BinaryFormatter();
+                formatter.Serialize(objectStream, this);
+                objectStream.Seek(0, SeekOrigin.Begin);
+                return formatter.Deserialize(objectStream) as Employee;
+            }
+        }
+
+        public Employee ShallowClone()
+        {
+            return Clone() as Employee;
+        }    
+    }
+```
+
+<p id = "suggestion15"></p>
+### 建议15、使用dynamic来简化反射实现
+
+    dynaimic 是Framework4.0的新特性。编译的时候不再对类型进行检查，默认支持开发者想要的任何特性。
+
+比如，即使对GetDynamicObject方法返回的对象一无所知，也可以像如下这样进行代码的调用：
+```C#
+    dynaimic dynaimicObject = GetDynamicObject();
+    Console.WriteLine(dynaimicObject.Name);
+    Console.WriteLine(dynaimicObject.SampleMethod());
+```
+
+如果运行时 dynaimicObject 不包含指定的这些特性（如上文中带返回值的方法 SampleMethod）,运行时程序会抛出一个 RuntimeBinderException 异常：
+
+    “System.Dynamic.ExpandoObject” 未包含“SampleMethod”的定义。
+
+利用 dynaimic 的这个特性，可以简化反射语法。在dynamic出现之前，假设存在类，代码如下所示：
+```C#
+    public class DtnamicSample
+    {
+        public string Name { get; set; }
+
+        public int Add(int a, int b)
+        {
+            return a + b;
+        }
+    }
+```
+
+我们这样使用反射，调用方代码如下所示：
+```C#
+    DynamicSample dynamicSample = new DynamicSample();
+    var addMethod = typeof(DynamicSample).GetMethod("Add");
+    int re = (int)addMethod.Invoke(dynaimicSample, new object[] {1, 2});
+```
+
+在使用dynamic后，代码看上去更简洁了，并且在可控的范围内减少了一次拆箱的机会，代码如下所示：
+```C#
+    dynaimic dynamicSample2 = new DynamicSample();
+    int re2 = dynamicSample2.Add(1, 2);
+```
+
+虽然代码看起来并没有减少多少，但是如果考虑到效率兼优美两个特性，那么dynamic的优势就显现出来了。如果对上面的代码执行1000000次，如下所示：
+```C#
+    int times = 1000000;
+    DynamicSample reflectSample = new DynamicSample();
+    var addMethod = typeof(DynamicSample).GetMethod("Add");
+    Stopwatch watch1 = Stopwatch.StartNew();
+    for(var i = 0; i < times; i++)
+    {
+        addMethod.Invoke(reflectSample, new object[] { 1, 2 });
+    }
+    Console.WriteLine(string.Format("反射耗时：{0}毫秒", watch1.ElapsedMillseconds));
+    dynaimic dynaimicSample = new DynamicSample();
+    Stopwatch watch2 = Stopwatch.StartNew();
+    for(int i = 0; i < times; i++)
+    {
+        dynamicSample.Add(1, 2);
+    }
+    Console.WriteLine(string.Format("dynaimic耗时：{0}毫秒", watch2.ElapsedMillseconds));
+```
+
+输出为：
+
+    反射耗时：2575毫秒
+    dynamic耗时：76毫秒
+
+如果对反射实现进行优化，代码如下所示：
+```C#
+    DynamicSample reflectSampleBetter = new DynamicSample();
+    var addMethod2 = typeof(DynamicSample).GetMethod("Add");
+    var delg = (Func<DynamicSample, int, int, int>)Delegate.CreateDelegate(typeof(FUnc<DynamicSample, int, int, int>), addMethod2);
+    Stopwatch watch3 = Stopwatch.StartNew();
+    for(var i = 0; i < times; i++)
+    {
+        delg(reflectSampleBetter, 1, 2);
+    }
+    Console.WriteLine(string.Format("优化的反射耗时：{0}毫秒", watch3.ElapsedMillseconds));
+```
+
+输出为：
+    
+    优化的反射耗时：12毫秒
+    
+优化后的反射实现，虽然效率和dynamic在一个数量级上，可是牺牲了代码的整洁度，这种实现在笔者看来是得不偿失的。所以，有了dynamic类型，建议大家：
+**始终使用dynamic来简化反射实现。**
+    
+###### 注意
+var和dynamic是两个概念。var实际上是编译器抛给我们的语法糖，一旦被编译，编译期会自动匹配var变量的实际类型，并用实际类型来替换该变量的声明。而dynamic被编译后，实际是一个object类型，只不过编译器会对dynamic类型进行特殊处理，让它在编译期间不进行任何的类型检查，而是将类型检查放到了运行期。
