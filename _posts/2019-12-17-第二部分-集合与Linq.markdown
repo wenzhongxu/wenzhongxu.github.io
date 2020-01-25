@@ -1,0 +1,345 @@
+---
+layout:     post
+title:      "第二部分 集合与Linq"
+subtitle:   "《编写高质量C#的建议》学习笔记 第二部分 集合与Linq"
+date:       2019-12-17 12:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 学习笔记
+---
+
+### [第二部分 集合与Linq](#secondChapter)  
+##### [建议16 元素数量可变的情况下不应该使用数组](#suggestion16)
+##### [建议17 多数情况下使用foreach进行循环遍历](#suggestion17)
+##### [建议18 foreach不能代替for](#suggestion18)
+##### [建议19 使用更有效的对象和集合初始化](#suggestion19)
+
+
+<p id = "secondChapter"></p>
+## 第二部分&nbsp;&nbsp;集合与Linq
+
+<p id = "suggestion16"></p>
+### 建议16、元素数量可变的情况下不应该使用数组
+
+在C#中，数组一旦被创建，长度就不能改变。如果需要一个动态且可变长度的集合，就应该使用ArrayList或List<T>来创建。而数组本身，尤其是一维数组，在遇到要求高效率的算法时，则会专门被优化以提升其效率。一维数组也称为向量，其性能是最佳的，在IL中使用了专门的指令来处理它们（如newarr、ldlem、ldelema、ldlen和stelem）。
+
+从内存使用的角度来说，数组在创建时被分配了一段固定长度的内存。如果数组的元素是值类型，则每个元素的长度等于相应的值类型的长度；如果数组的元素是引用类型，则每个元素的长度为该引用类型的IntPtr.Size。数组的存储结构一旦被分配，就不能再变化。而ArrayList是链表结构，可以动态地增减内存空间，如果ArrayList存储的是值类型，则会为每个元素增加12字节的空间，其中4字节用于对象引用，8字节是元素装箱时引入的对象头。List<T>是ArrayList的泛型实现，它省去了拆箱和装箱带来的开销。
+
+###### 注意
+由于数组本身在内存上的特点，因此在使用数组的过程中还应该注意大对象的问题。所谓“大对象”，是指那些占用内存超过85000字节的对象，它们被分配在大对象堆里。大对象的分配和回收与小对象相比，都不太一样，尤其是回收，大对象在回收过程中会带来效率很低的问题。所以不能肆意对数组指定过大的长度，这会让数组成为一个大对象。
+
+如果一定要动态改变数组的长度，一种方法是将数组转换为ArrayList或List<T>，如下所示：
+```C#
+    int[] iArr = { 0, 1, 2, 3, 4, 5, 6 };
+    ArrayList arrayListInt = ArrayList.Adapter(iArr); // 将数组转变为ArrayList
+    arrayListInt.Add(7);
+    List<int> listInt = iArr.ToList<int>(); //将数组转变为List<T>
+    listInt.Add(7);
+```
+
+还有一种方法是用数组的复制功能。数组继承自System.Array，抽象类System.Array提供了一些有用的实现方法，如Copy方法，负责将一个数组的内容复制到另一个数组中。无论哪种方法，改变数组长度就相当于重新创建一个数组对象。
+
+为了让数组看上去本身就具有动态改变长度的功能，可以创建一个名为ReSize的扩展方法，如下：
+```C#
+    public static class ClassForExtensions
+    {
+        public static Array ReSize(this Array array, int newSize)
+        {
+            Type t = array.GetType().GetElementType();
+            Array newArray = Array.CreateInstance(t, newSize);
+            Array.Copy(array, 0, newArray, 0, Math.Min(array.Length, newSize));
+            return newArray;
+        }
+    }
+```
+
+调用方代码如下：
+```C#
+    int[] iArr = { 0, 1, 2, 3, 4, 5, 6 };
+    iArr = (int[])iArr.ReSize(10);
+```
+
+下面对改变数组长度和改变List<T>长度的耗时做一个比较，以便强调————在元素数量可变的情况下不应该使用数组。
+```C#
+    static void Main(string[] args)
+    {
+        ReSizeArray();
+        ReSizeList();
+    }
+
+    private static void ReSizeArray()
+    {
+        int[] iArr = { 0, 1, 2, 3, 4, 5, 6 };
+        Stopwatch watch = new Stopwatch();
+        watch.Start();
+        iArr = (int[])iArr.ReSize(10);
+        watch.Stop();
+        Console.WriteLine("ResizeArray: " + watch.Elapsed);
+    }
+
+    private static void ReSizeList()
+    {
+        List<int> iArr = new List<int>(new int[] { 0, 1, 2, 3, 4, 5, 6 });
+        Stopwatch watch = new Stopwatch();
+        watch.Start();
+        iArr.Add(0);
+        iArr.Add(0);
+        iArr.Add(0);
+        watch.Stop();
+        Console.WriteLine("ReSizeList: " + watch.Elapsed);
+    }
+```
+
+输出为：
+
+    ResizeArray: 00:00:00.0004441
+    ReSizeList: 00:00:00.0000036
+
+严格意义上来讲，List<T>不存在改变长度的说法，只是为了比较。但在时间效率上，ResizeList比ResizeArray要高100倍以上。
+
+
+<p id = "suggestion17"></p>
+### 建议17、多数情况下使用foreach进行循环遍历
+
+假设存在一个数组，其遍历模式可能采用依据索引来进行遍历的方法；
+假设存在一个HashTable，其遍历模式可能是按照键值来进行遍历。
+
+无论是哪个集合，如果遍历没有一个公共的接口，那么客户端在进行调用的时候，都相当于是对具体类型进行了编码。这样一来，当需求发生变化时，就必须修改代码。并且由于客户端代码过多的关注了集合内部的实现，代码的可移植性就会变得很差，这直接违反了面向对象中的开闭原则。我们先来实现一个自己的迭代器模式：
+```C#
+    static void Main(string[] args)
+    {
+        // 使用接口IMyEnumerable代替MyList
+        IMyEnumerable list = new MyList();
+        // 得到迭代器，在循环中针对迭代器编码，而不是集合MyList
+        IMyEnumerator enumerator = list.GetEnumerator();
+        for(int i = 0; i < list.Count; i++)
+        {
+            object current = enumerator.Current;
+            enumerator.MoveNext();
+        }
+        while(enumerator.MoveNext())
+        {
+            object current = enumerator.Current;
+        }
+    }
+
+    /// <summary>
+    /// 要求所有的迭代器全部实现该接口
+    /// </summary>
+    interface IMyEnumerator
+    {
+        bool MoveNext();
+        object Current { get; }
+    }
+
+    /// <summary>
+    /// 要求所有的集合实现该接口
+    /// 这样一来，客户端就可以针对该接口编码
+    /// 而无需关注具体的实现
+    /// </summary>
+    interface IMyEnumerable
+    {
+        IMyEnumerator GetEnumerator();
+        int Count { get; }
+    }
+    
+    class MyList : IMyEnumerable
+    {
+        object[] items = new object[10];
+        IMyEnumerator myEnumerator;
+
+        public object this[int i]
+        {
+            get { return items[i]; }
+            set { this.items[i] = value; }
+        }
+
+        public int Count
+        {
+            get { return items.Length; }
+        }
+
+        public IMyEnumerator GetEnumerator()
+        {
+            if(myEnumerator == null)
+            {
+                myEnumerator = new myEnumerator(this);
+            }
+            return myEnumerator;
+        }
+    }
+
+    class myEnumerator : IMyEnumerator
+    {
+        int index = 0;
+        MyList myList;
+        publi myEnumerator(MyList myList)
+        {
+            this.myList = myList;
+        }
+
+        public bool MoveNext()
+        {
+            if(index + 1 > myList.Count)
+            {
+                index = 1;
+                return false;
+            }
+            else
+            {
+                idnex++;
+                return true;
+            }
+        }
+
+        public object Current
+        {
+            get { return myList[index - 1]; }
+        }
+    }
+```
+
+MyList 模拟了一个集合类，它继承了接口IMyEnumerable，这样，在客户端进行调用的时候，我们就可以直接使用IMyEnumerable来声明变量，如代码中的以下语句：
+```C#
+    IMyEnumerable list = new MyList();
+```
+
+如果未来我们新增了其他的集合类，那么针对list的编码即使不做修改也能运行良好。在IMyEnumerable中声明的GetEnumerator方法返回一个继承了IMyEnumerator的对象。在MyList的内部，默认返回MyEnumerator。MyEnumerator就是迭代器的一个实现，如果对于迭代的需求有变化，可以重新开发一个迭代器（如下所示），然后在客户端迭代的时候使用该迭代器。
+
+```C#
+    myEnumerator enumerator2 = new myEnumerator(list);
+    while(enumerator2.MoveNext())
+    {
+        object current = enumerator2.Current;
+    }
+```
+
+注意，在客户端的代码中，我们在迭代的过程分别演示了for循环和while循环；但是因为使用了迭代器，两个循环都没有针对MyList编码，而是实现了对迭代器的编码。
+
+以上是自己实现的迭代器模式，虽然都加了“My”字样，其实FCL中有与之对应的接口和类型，使用FCL中相应的类型进行客户端的代码编码，大致如下：
+```C#
+    ICollection<object> list = new List<object>();
+    IEnumerator enumerator = list.GetEnumerator();
+    for(int i = 0; i < list.Count; i++)
+    {
+        object current = enumerator.Current;
+        enumerator.MoveNext();
+    }
+    while(enumerator.MoveNext())
+    {
+        object current = enumerator.Current;
+    }
+```
+
+但是无论是for循环还是while循环，都有些啰嗦，于是，foreach就出现了：
+```C#
+    foreach(var current in list)
+    {
+        object current = enumerator.Current;
+    }
+```
+
+foreach循环除了可以提供简化的语法外，还有另外两个优势：
+**自动将代码置入try-finally块。**
+**若类型实现了IDispose接口，它会在循环结束后自动调用Dispose方法。**
+
+###### 补充知识：
+using是try-finally的语法糖。在对象使用结束后，会自动调用Dispose方法。
+
+    using(List<object> XXXX = new List<object>())
+    {
+
+    }
+
+等同于：
+
+    List<object> XXXX = new List<object>();
+    try
+    {
+
+    }
+    finally
+    {
+        XXXX.Dispose();
+    }
+
+
+<p id = "suggestion18"></p>
+
+### 建议18、foreach不能代替for
+
+    虽然foreach具有语法更简化和默认调用Dispose方法，但不能适用于全部场景。
+
+foreach存在一个问题：**不支持循环时对集合进行增删操作**。
+
+比如运行下面的代码会直接抛出异常InvalidOperationException：
+```C#
+    List<int> list = new List<int>() {0, 1, 2, 3 };
+    foreach(int item in list)
+    {
+        list.Remove(item);
+        Console.WriteLine(item.ToString());
+    }
+```
+
+取而代之的方式是使用for循环：
+```C#
+    List<int> list = new List<int>() {0, 1, 2, 3 };
+    for(int i = 0; i < list.Count; i++)
+    {
+        list.Remove(list[i]);
+        Console.WriteLine(list[i].ToString());
+    }
+```
+
+foreach循环使用了迭代器进行集合的遍历，它在FCL提供的迭代器内部维护了一个对集合版本的控制。
+
+集合版本其实就是一个整型变量，任何对集合的增删操作都会是版本号加1。
+
+foreach循环会调用MoveNext方法来遍历元素，在MoveNext方法内部会进行版本号的检测，一旦检测到版本号有变动，就会抛出InvalidOperationException异常。
+
+for循环直接使用索引器，不对集合版本号进行判断，所以不存在因为集合的变动而带来异常（超出索引长度除外）。
+
+关于性能上，两者都承认在时间和内存上存在损耗，尤其是针对泛型集合时，两者的损耗是在同一个数量级别上的。两者内部都是对集合的访问，迭代器仅仅是多进行了一次版本检测。
+
+
+<p id = "suggestion19"></p>
+### 建议19、使用更有效的对象和集合初始化
+
+对象初始化设定项支持在大括号中对自动实现的属性进行赋值。集合初始化也同样进行了简化。如下：
+```C#
+    Person person = new Person()
+    {
+        Name = "Mike",
+        Age = 20
+    }
+
+    List<Person> persons = new List<Person>()
+    {
+        new Person() { Name = "Rose", Age = 19 },
+        mike,
+        null
+    }
+```
+
+使用集合的初始化设定项，编译器会在集合对象创建完毕后对集合调用Add方法。上面初始化语句中就创建了一个新对象和一个现有对象，以及一个null值。
+
+初始化设定项绝不仅仅是为了对象和集合初始化的方便，更重要的作用是为Linq查询中的匿名类型进行属性的初始化。由于Linq查询返回的集合中匿名类型的属性都是只读的，如果需要为匿名类型属性赋值，或者增加属性，只能通过初始化设定项来进行。初始化设定项还能为属性使用表达式。
+
+下面的代码为Linq查询中创建了一个新的匿名类型，该类型含有属性Name和AgeScope，而AgeScope需要通过计算Person的Age属性得到。
+```C#
+    List<Person> persons2 = new List<Person>()
+    {
+        new Person() { Name = "Rose", Age = 19 },
+        new Person() { Name = "Steve", Age = 45 },
+        new Person() { Name = "Jessica", Age = 20 }
+    };
+
+    var pTemp = from p in persons2 select new { p.Name, AgeScope = p.Age > 20 ? "Old" : "Young" };
+    foreach(var item in pTemp)
+    {
+        Console.WriteLine(string.Format("{0}:{1}", item.Name, item.AgeScope));
+    }
+```
