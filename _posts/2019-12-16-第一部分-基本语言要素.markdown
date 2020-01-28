@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "编写高质量C#代码的建议 第一部分"
+title:      "第一部分 基本语言要素"
 subtitle:   "《编写高质量C#的建议》学习笔记 第一部分 基本语言要素"
 date:       2019-12-16 12:00:00
 author:     "WenzhongXu"
