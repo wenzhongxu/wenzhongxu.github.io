@@ -1,0 +1,924 @@
+---
+layout:     post
+title:      "第一部分 泛型、委托和事件"
+subtitle:   "《编写高质量C#的建议》学习笔记 第三部分 泛型、委托和事件"
+date:       2019-12-16 12:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 学习笔记
+---
+
+### [第三部分 泛型、委托和事件](#thirdChapter)  
+##### [建议32 总是优先考虑泛型](#suggestion32)
+##### [建议33 避免在泛型类型中声明静态成员](#suggestion33)
+##### [建议34 为泛型参数设定约束](#suggestion34)
+##### [建议35 使用default为泛型类型变量指定初始值](#suggestion35)
+##### [建议36 使用FCL中的委托声明](#suggestion36)
+##### [建议37 使用Lambda表达式代替方法和匿名方法](#suggestion37)
+##### [建议38 小心闭包中的陷阱](#suggestion38)
+##### [建议39 了解委托的实质](#suggestion39)
+##### [建议40 使用event关键字为委托施加保护](#suggestion40)
+##### [建议41 实现标准的事件模型](#suggestion41)
+##### [建议42 使用泛型参数兼容泛型接口的不可变性](#suggestion42)
+##### [建议43 让接口中的泛型参数支持协变](#suggestion43)
+##### [建议44 理解委托中的协变](#suggestion44)
+##### [建议45 为泛型类型参数指定逆变](#suggestion45)
+
+<p id = "firstChapter"></p>
+## 第三部分&nbsp;&nbsp;泛型、委托和事件
+
+<p id = "suggestion32"></p>
+### 建议32、总是优先考虑泛型
+
+无论是泛型类还是泛型方法都同时具备可重用性、类型安全和高效率等特性。
+
+可重用性：
+```C#
+    class MyList<T>
+    {
+        T[] items;
+
+        public T this[int i]
+        {
+            get { return items[i]; }
+            set { this.items[i] = value; }
+        }
+
+        public int Count
+        {
+            get { return items.Length; }
+        }
+
+        // 省略其他方法
+    }
+```
+
+可以把T理解为一个占位符，在运行时，会用实际代码中输入的T类型代替T。如MyList<int>和MyList<string>。
+
+如果不用泛型实现代码重用，另一种方法是让MyList的编码从object的角度去设计。C#中，所有类型（包括值类型和引用类型）都是继承自object,代码如下所示：
+```C#
+    class MyList
+    {
+        object[] items;
+
+        public object this[int i]
+        {
+            get { return items[i]; }
+            set { this.items[i] = value; }
+        }
+
+        public int Count
+        {
+            get { return items.Length; }
+        }
+
+        // 省略其他方法
+    }
+```
+
+这会让下面的代码编译通过：
+```C#
+    list[0] = 123;
+    list[1] = "123";
+```
+
+上面代码带来的问题就是“非类型安全性”。具体看建议20。
+
+
+<p id = "suggestion33"></p>
+### 建议33、避免在泛型类型中声明静态成员
+
+看代码：
+```C#
+    static void Main(string[] args)
+    {
+        MyList<int> list1 = new MyList<int>();
+        MyList<int> list2 = new MyList<int>();
+        MyList<string> list3 = new MyList<string>();
+        Console.WriteLine(MyList<int>.Count);  // 2
+        Console.WriteLine(MyList<string>.Count); // 1
+    }
+    class MyList<T>
+    {
+        public static int Count { get; set; }
+        public MyList()
+        {
+            Count++;
+        }
+    }
+```
+
+随着为T指定不同的数据类型，MyList<T>相应的也变成了不同的数据类型，在它们之间是不共享静态成员的。若T指定的数据类型是一致的，两个泛型对象间是可以共享静态成员的，如list1和list2，但是为了规避因此引起的混淆，建议在实际的编码中，尽量避免声明泛型类型的静态成员。
+
+上面例子是基于泛型类型的，非泛型类型中静态泛型方法看起来很接近该例子，但应当始终这样来理解：
+**非泛型类型中的泛型方法并不会在运行时的本地代码中生成不同的类型。**
+
+所以下面的代码：
+```C#
+    static void Main(string[] args)
+    {
+        Console.WriteLine(MyList.Func<int>());
+        Console.WriteLine(MyList.Func<int>());
+        Console.WriteLine(MyList.Func<string>());
+    }
+    class MyList
+    {
+        static int count;
+        public static int Func<T>()
+        {
+            return count++;
+        }
+    }
+```
+
+输出为：
+
+    0
+    1
+    2
+
+
+<p id = "suggestion34"></p>
+### 建议34、为泛型参数设定约束
+
+没有约束的泛型参数作用很有限，约束会让泛型参数具有更多的行为和属性。
+
+查看下面代码，参数t1和t2仅仅具有object的属性和行为，所以几乎不能在方法中对它们做任何的操作：
+```C#
+    class SalaryComputer
+    {
+        public int Compare<T>(T t1, T t2)
+        {
+            return 0;
+        }
+    }
+    class Salary
+    {
+        public int BaseSalary { get; set; }
+        public int Bonus { get; set; }
+    }
+```
+
+但是，加了约束后，t1和t2就变成了一个有用的对象。由于为其指定了对应的类型，t1和t2现在就是一个Salary了，在方法的内部，拥有了属性BaseSalary和Bonus：
+```C#
+    class SalaryComputer
+    {
+        public int Compare<T>(T t1, T t2) where T : Salary
+        {
+            if(t1.BaseSalary > t2.BaseSalary)
+            {
+                return 1;
+            }
+            else if(t1.BaseSalary == t2.BaseSalary)
+            {
+                return 0;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+    }
+```
+
+可以为泛型参数指定的约束有：
+
+1. 指定参数是值类型(除Nullable外)，可以有如下形式：
+```C#
+    public void Method1<T>(T t) where T : struct
+    {
+    }
+```
+
+2. 指定参数是引用类型，可以有如下形式
+```C#
+    public void Method1<T>(T t) where T : class
+    {
+    }
+    public void Method2<T>(T t) where T : Salary
+    {
+    }
+```
+
+注意，object不能用来作为约束。
+
+3. 指定参数具有无参数的公共构造方法，可以有如下形式：
+```C#
+    public void Method1<T t> where T : new()
+    {
+    }
+```
+注意，CLR目前只支持无参构造方法约束。
+
+4. 指定参数必须是指定的基类，或者派生自指定的基类。
+   
+5. 指定参数必须是指定的接口，或者实现指定的接口。
+   
+6. 指定T提供的类型参数必须是为U提供的参数，或者派生自为U提供的参数。
+如下形式：
+```C#
+        class Sample<U>
+        {
+            public void Method1<T>(T t) where T : U
+            {
+
+            }
+        }
+```
+
+7. 可以对同一类型的参数应用多个约束，并且约束自身可以是泛型类型。
+
+在编码过程中，应该始终考虑为泛型参数设定约束，使泛型参数成为一个实实在在的对象，让它具有行为和属性，而不仅仅是一个object。
+
+
+<p id = "suggestion35"></p>
+### 建议35、使用default为泛型类型变量指定初始值
+
+有些算法，比如泛型集合List<T>的Find算法，所查找的对象有可能是值类型也有可能是引用类型。在这种算法内部，常常会为这些值类型变量或引用类型变量指定默认值。但，值类型变量的默认初始值是0，引用类型的默认初始值是null，所以应该使用default关键字：
+```C#
+    public T Func<T>()
+    {
+        T t = default(T);
+        return t;
+    }
+```
+
+这样，在运行时碰到的T是整型，运行时就会赋值0，如果是Person这样的引用类型，就会赋值null。
+
+
+<p id = "suggestion36"></p>
+### 建议36、使用FCL中的委托声明
+
+FCL中存在三类这样的委托声明，分别是Action、Func、Predicate。
+
+1. Action表示接受0个或多个输入参数，执行一段代码，没有任何返回值。
+2. Func表示接受0个或多个输入参数，执行一段代码，带返回值。
+3. Predicate表示定义一组条件并判断参数是否符合条件。
+
+如上所述，下面的委托声明AddHandler和PrintHandler完全是可以被Func和Action代替的：
+```C#
+    delegate int AddHandler(int i, int j);
+    delegate void PrintHandler(string msg);
+
+    static void Main(string[] args)
+    {
+        AddHandler add = Add;
+        PrintHandler print = Print;
+        print(add(1, 2).ToString());
+    }
+    static int Add(int i, int j)
+    {
+        return i + j;
+    }
+    static void Print(string msg)
+    {
+        Console.WritLine(msg);
+    }
+```
+
+用Func和Action进行取代的版本是：
+```C#
+    // 省略
+    static void Main(string[] args)
+    {
+        Func<int, int, int> add = Add;
+        Action<string> print = Print;
+        print(add(1,2).ToString());
+    }
+    // 省略
+```
+
+我们应该习惯在代码中使用这类委托来代替自己的委托声明。
+
+除Action、Func和Predicate外，FCL中还有用于表示特殊含义的委托声明。如用于表示注册事件方法的委托声明：
+```C#
+    public delegate void EventHandler(object sender, EventArgs e);
+    public delegate void EventHandler<TEventArgs>(object sender, TEventArgs e);
+```
+
+表示线程方法的委托声明：
+```C#
+    public delegate void ThreadStart();
+    public delegate void ParameterizedThreadStart(object obj);
+```
+
+表示异步回调的委托声明：
+```C#
+    public delegate void AsyncCallback(IAsyncResult ar);
+```
+
+在FCL中每一类委托声明都代表一类特殊的用途，虽然可以使用自己的委托声明来代替，但是这样做不仅没有必要，而且会使代码失去简洁性和标准性。在实现我们自己的委托声明前，应首先查看MSDN，确信有必要后才这样做。
+
+###### 扩展说明
+很少有方法的参数能够超过16个，如果真有这样的参数，首先需要考虑是否自己的设计存在问题。另外，我们也可以使用params关键字来减少参数的声明。如：
+```C#
+    static void Method1(params int[] i)
+```
+
+表示该方法接收0个或多个整型参数。
+
+
+<p id = "suggestion37"></p>
+### 建议37、使用Lambda表达式代替方法和匿名方法
+
+对于建议36中的程序，我们可以改下如下：
+```C#
+    Func<int, int, int> add = new Func<int, int, int>(delegate(int i, int j)
+    {
+        retutn i + j;
+    });
+    Action<string> print = new Action<string>(delegate(string msg)
+    {
+        Console.WriteLine(msg);
+    });
+    print(add(1, 2).ToString());
+```
+
+使用匿名方法后，我们不需要在Main方法外部声明两个方法，可以直接在Main这个工作方法中完成所有的代码编写，而且不会影响代码的清晰性。
+
+所有代码行数不超过3行的方法（条件是它不被重用），都建议采用这种方式编写。上面代码的改进版本是：
+```C#
+    Func<int, int, int> add = delegate(int i, int j)
+    {
+        return i + j;
+    };
+    Action<string> print = delegate(string msg)
+    {
+        Console.WriteLine(msg);
+    };
+    print(add(1, 2).ToString());
+```
+
+上面代码看上去简化了，最终极的改进版是使用Lambda表达式：
+```C#
+    Func<int, int, int> add = (i, j) =>
+    {
+        return i + j;
+    };
+    Action<string> print = (msg) => 
+    {
+        Console.WriteLine(msg);
+    };
+    print(add(1, 2).ToString());
+```
+
+以下是使用Lambda表达式简化代码的威力：
+```C#
+    // 第一种写法
+    return this.Find(new Predicate<Student>(delegate(Student target)
+    {
+        if(target.Name == name)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }));
+    // 第二种写法
+    return this.Find(new Predicate<Student>((target) =>
+    {
+        if(target.Name == name)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }));
+    // 第三种写法
+    return this.Find((target) =>
+    {
+        if(target.Name == name)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    });
+    // 第四种写法
+    return this.Find(target => target.Name == name);
+```
+
+
+<p id = "suggestion38"></p>
+### 建议38、小心闭包中的陷阱
+先看如下代码：
+```C#
+    static void Main(string[] args)
+    {
+        List<Action> lists = new List<Action>();
+        for(int i = 0; i < 5; i++)
+        {
+            Action t = () =>
+            {
+                Console.WriteLine(i.ToString());
+            };
+            lists.Add(t);
+        }
+        foreach(Action t in lists)
+        {
+            t();
+        }
+    }
+```
+
+本想让匿名方法接收参数i，并输出 0 1 2 3 4
+
+而实际的输出为 5 5 5 5 5
+
+其实前面的代码和下面这段代码是一致的：
+```C#
+    static void Main(string[] args)
+    {
+        List<Action> lists = new List<Action>();
+        TempClass tempClass = new TempClass();
+        for(tempClass.i = 0; tempClass.i < 5; tempClass.i++)
+        {
+            Action t = tempClass.TempFuc;
+            lists.Add(t);
+        }
+        foreach(Action t in lists)
+        {
+            t();
+        }
+    }
+    class TempClass
+    {
+        public int i;
+        public void TempFuc()
+        {
+            Console.WriteLine(i.ToString());
+        }
+    }
+```
+
+这段代码所演示的就是闭包对象。所谓闭包对象，指的是上面这种情形中的TempClass对象。如果匿名方法引用了某个局部变量，编译器就会自动将该引用提升到该闭包对象中，即将for循环中的变量i修改成了引用闭包对象的公共变量i。这样一来，即使代码执行后离开了原局部变量i的作用域，包含该闭包对象的作用域也还存在。
+
+要实现预期的输出，可以将闭包对象的产生放在for循环内部：
+```C#
+    static void Main(string[] args)
+    {
+        List<Action> lists = new List<Action>();
+        for(int i = 0; i < 5; i++)
+        {
+            int temp = i;
+            Action t = () =>
+            {
+                Console.WriteLine(temp.ToString());
+            };
+            lists.Add(t);
+        }
+        foreach(Action t in lists)
+        {
+            t();
+        }
+    }
+```
+此代码和下面的代码是一致的：
+```C#
+    static void Main(string[] args)
+    {
+        List<Action> lists = new List<Action>();
+        for(int i = 0; i < 5; i++)
+        {
+            TempClass tempClass = new TempClass();
+            tempClass.i = i;
+            Action t = tempClass.TempFuc;
+            lists.Add(t);
+        }
+        foreach(Action t in lists)
+        {
+            t();
+        }
+    }
+    class TempClass
+    {
+        public int i;
+        public void TempFuc()
+        {
+            Console.WriteLine(i.ToString());
+        }
+    }
+```
+
+
+<p id = "suggestion39"></p>
+### 建议39、了解委托的实质
+理解C#的委托需要把握两个要点：
+
+1. 委托是方法指针
+2. 委托是一个类，但对其进行实例化的时候，要将应用方法作为它的构造方法的参数。
+
+基于第一点，设想在点对点的文件传输过程中，要设计一个文件传输类，该传输类起码要满足以下几项功能：
+1. 传输文件
+2. 按照百分制通知传输进度；
+3. 传输类能同时被控制台应用程序和Winform应用程序调用。
+
+由于要让通知本身能被控制台应用程序和Winform程序使用，在设计这个文件类进行进度通知时，就不能显式调用：
+```C#
+    Console.WriteLine("当前进度：" + fileProgress);
+```
+或者
+```C#
+    this.progressText.Text = "当前进度：" + fileProgress;
+```
+
+理想的情况是，在需要通知的地方，全部将其置换成一个方法的指针，由调用者来决定该方法完成什么功能。这个方法指针在C#中被理解成委托。
+
+像下面这样来声明文件进度委托：
+```C#
+    public delegate void FileUploadedHandler(int progress);
+```
+
+而这个文件传输类最终可能是这样的：
+```C#
+    class FileUploader
+    {
+        public delegate void FileUploadedHandler(int progress);
+        public FileUploadedHandler FileUploaded;
+
+        public void Upload()
+        {
+            int fileProgress = 100;
+            while(fileProgress > 0)
+            {
+                // 传输代码，省略
+                fileProgress--;
+                if(FileUploader != null)
+                {
+                    FileUploader(fileProgress);
+                }
+            }
+        }
+    }
+```
+
+调用者在调用这个文件传输类的时候，应该同时为FileUploaded赋值。赋值过程也就是将自身所具有的和委托声明相同的声明方法名赋值给FileUploaded。这样，类型FileUploader在执行到下面的语句时，就是在执行调用者自身的方法：
+```C#
+    FileUploaded(fileProgress);
+```
+
+再看“委托是一个类”。实际上，应该把以下语句：
+```C#
+    public delegate void FileUploadedHandler(int progress);
+```
+
+看成是像下面这样的一个类：
+```C#
+    class FileUploadedHandler: System.MulticaseDelegate
+    {
+        public FileUploadedHandler(object @object, IntPtr method)
+        {}
+        
+        public virtual IAsyncResult BeginInvoke(int progress, AysncCallback callback, object @object)
+        {}
+
+        public virtual void EndInvoke(IAsyncResult result)
+        {}
+
+        public virtual void Invoke(int progress)
+        {}
+    }
+```
+
+调用委托方法：
+```C#
+    FileUploaded(fileProgress); 
+```
+其实调用的是: 
+```C#
+    FileUploaded.Invoke(fileProgress);
+```
+
+
+<p id = "suggestion40"></p>
+### 建议40、使用event关键字为委托施加保护
+
+在上一个建议中，我们使用委托实现了一个具有通知功能的文件传输类。可以像下面这样来使用这个类：
+```C#
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            FileUploader fl = new FileUploader();
+            fl.FileUploaded = Progress;
+            fl.FileUploaded += ProgressAnother;
+            fl.Upload();
+        }
+
+        static void Progress(int progress)
+        {
+            Console.WriteLine(progress);
+        }
+
+        static void ProgressAnother(int progress)
+        {
+            Console.WriteLine(string.Format("另一个通知方法：{0}",progress));
+        }
+    }
+```
+
+以上调用者代码本身是和FileUploader类一起的，这起码存在两个问题：
+1. 如果在Main中，另起一个工作线程，该工作线程则可以将FileProgress委托链置为空：
+```C#
+    fl.FileUploaded = null;
+```
+&emsp;&emsp;这会直接导致主线程不能再接收到FileUploader对象的通知。
+
+2. 可以在外部直接调用FileUploaded,如： 
+```C#
+    fl.FileUploaded(10);
+```
+&emsp;&emsp;这是不允许的。什么时候通知调用者是FileUploader类自己的职责，不是调用者本身来决定的。event关键字为委托加了保护。
+&emsp;&emsp;例如，将FileUploaded类的如下语句加上event，即：
+```C#
+    public FileUploadedHandler FileUploaded;
+```
+&emsp;&emsp;改为
+```C#
+    public event FileUploadedHandler FileUploaded;
+```
+
+这样，上面提到的几种情况会在编译期间被阻止：
+```C#
+    fl.FileUploaded = null;
+    fl.FileUploaded = progress;
+    fl.FileUploaded(10);
+```
+以上代码编译会出现错误警告：
+        
+    事件“ConsoleApplication1.FileUploader.FileUploaded”只能出现在 += 或 -=的左边（从类型“ConsoleApplication1.FileUploader”中使用时除外）
+
+
+<p id = "suggestion41"></p>
+### 建议41、实现标准的事件模型
+
+上一个建议中的文件传输类FileUploader是不符合C#编码规范的。
+
+微软为事件模型设定的规范如下：
+1. 委托类型的名称以EventHandler结束；
+2. 委托原型返回值为void；
+3. 委托原型具有两个参数：sender表示事件触发者，e表示事件参数；
+4. 事件参数的名称以EventArgs结束。
+
+为了将FileUploader修改得符合编码规范，首先需要提供一个FileUploadedEventArgs类来保存进度信息：
+```C#
+    class FileUploadedEventArgs : EventArgs
+    {
+        public int FileProgess { get; set; }
+    }
+```
+
+对FileUploader类也相应作出修改：
+```C#
+    class FileUploader
+    {
+        public event EventHandler<FileUploadedEventArgs> FileUploaded;
+
+        public void Upload()
+        {
+            FileUploadedEventArgs e = new FileUploadedEventArgs() { FileProgess = 100 };
+            while(e.FileProgess > 0)
+            {
+                //传输代码，省略
+                e.FileProgess--;
+                if(FileUploaded != null)
+                {
+                    FileUploaded(this, e);
+                }
+            }
+        }
+    }
+```
+
+最终，调用者的代码看起来应该如下：
+```C#
+    class Program
+    {
+        static void Main(string[] args)
+        {
+             FileUploader fl = new FileUploader();
+            fl.FileUploaded += Progress;
+            fl.Upload();
+        }
+
+        static void Progress(object sender, FileUploadedEventArgs e)
+        {
+            Console.WriteLine(e.FileProgess);
+        }
+    }
+```
+
+
+<p id = "suggestion42"></p>
+### 建议42、使用泛型参数兼容泛型接口的不可变性
+
+让返回值类型返回比声明的类型派生程度更大的类型，就是“协变”。以下代码就是一个不自觉应用协变的例子：
+```C#
+    public Employee GetAEmployee(string name)
+    {
+        Console.WriteLine("我是雇员：" + name);
+        return new Programmer() { Name = name }; //Programmer是Employee的子类
+    }
+```
+
+Programmer是Employee的子类，所以一个Programmer对象也就是一个Employee对象。方法GetAEmployee返回一个Programmer对象，也就是返回一个Employee对象。协变的应用如此自然，所以有可能写出如下代码：
+```C#
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            ISalary<Programmer> s = new BaseSalaryCounter<Programmer>();
+            PrintSalary(s);
+        }
+
+        static void PrintSalary(ISalary<Employee> s)
+        {
+            s.Pay();
+        }
+    }
+
+    interface ISalary<T>
+    {
+        void Pay();
+    }
+    
+    class BaseSalaryCounter<T> : ISalary<T>
+    {
+        public void Pay()
+        {
+            Console.WriteLine("Pay base Salary");
+        }
+    }
+
+    class Employee
+    {
+        public string Name { get; set; }
+    }
+    class Programmer : Employee
+    {
+
+    }
+    class Manager : Employee
+    {
+
+    }
+```
+
+在PrintSalary方法中，方法接收的参数类型时ISalary<Employee>。想当然认为ISalary<Programmer>必然也是可以被PrintSalary方法接收的。实际会报如下错：
+
+    无法从“ConsoleApplication4.ISalary<ConsoleApplication4.Programmer>”转换为“ConsoleApplication4.ISalary<ConsoleApplication4.Employee>”.ISalary<ConsoleApplication4.Employee>”
+    要让PrintSalary完成需求，可以使用泛型类型参数：
+    static void PrintSalary<T>(ISalary<T> s)
+    {
+        s.Pay();
+    }
+
+###### 注意
+开头指出“协变”是针对返回值而言的，但是所举的例子却没有体现返回值的概念。实际上，只要泛型类型参数在一个接口声明中不被用来作为方法的输入参数，都可姑且把它看成是“返回值”类型。但是，只要将T作为输入参数，便不满足“协变”定义了。如：
+```C#
+    interface ISalary<out T>
+    {
+        void Pay(T t);
+    }
+```
+    
+编译器会提示：类型参数T必须为“ConsoleApplication4.ISalary<T>.Pay(T)”上有效的逆变式。“T”为协变。
+
+
+<p id = "suggestion43"></p>
+### 建议43、让接口中的泛型参数支持协变
+接口中的泛型声明加上out关键字也可以支持协变，如下所示：
+```C#
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            ISalary<Programmer> s = new BaseSalaryCounter<Programmer>();
+            ISalary<Manager> t = new BaseSalaryCounter<Manager>();
+            PrintSalary(s);
+            PrintSalary(t);
+        }
+
+        static void PrintSalary(ISalary<Employee> s) // 用法正确
+        {
+            s.Pay();
+        }
+    }
+    interface ISalary<out T> // 使用out关键字
+    {
+        void Pay();
+    }
+```
+
+如果要编写泛型接口，除非确定该接口中的泛型参数不涉及变体，否则都建议加上out关键字。协变增大了接口的使用范围，而且几乎不会带来什么副作用。
+
+
+<p id = "suggestion44"></p>
+### 建议44、理解委托中的协变
+
+委托中的泛型变量天然是部分支持协变的。为什么是部分，看如下例子：
+```C#
+    public delegate T GetEmployeeHanlder<T>(string name);
+    
+    static void Mian()
+    {
+        GetEmployeeHanlder<Employee> getAEmployee = GetAManager;
+        Employee e = getAEmployee("Mike");
+    }
+
+    static Manager GetAManager(string name)
+    {
+        Console.WriteLine("我是经理：" + name);
+        return new Manager(){ Name = name };
+    }
+
+    static Employee GetAEmployee(string name)
+    {
+        Console.WriteLine("我是雇员：" + name);
+        return new Employee() { Name = name };
+    }
+```
+
+方法GetAManager返回的是一个Manager，在使用中，其实是将其赋值给了一个泛型参数为Employee的委托变量。但在下面这种情况下还是要out关键字，否则编译不通过：
+```C#
+    GetEmployeeHanlder<Manager> getAManager = GeAManager;
+    GetEmployeeHanlder<Manager> getAEmployee = getAManager;
+```
+
+要是编译通过，需修改如下：
+```C#
+    public delegate T GetEmployeeHanlder<out T>(string name);
+```
+
+除非考虑到该委托声明肯定不会用于可变性，否则，为委托中的泛型参数指定out关键字会拓展该委托的声明，建议实际编码中永远这样使用。
+
+
+<p id = "suggestion45"></p>
+### 建议45、为泛型类型参数指定逆变
+
+逆变是指参数可以是委托或泛型接口的参数类型的基类。支持逆变的常用委托有：
+```C#
+    Func<in T, out TResult>
+    Predicate<in T>
+```
+
+常用泛型接口有：
+```C#
+    IComparer<in T>
+```
+    
+下面例子演示了泛型类型参数指定逆变带来的好处：
+```C#
+    class Program
+    {
+        static void Main()
+        {
+            Programmer p = new Programmer { Name = "Mike" };
+            Manager m = new Manager { Name = "Steve" };
+            Test(p, m);
+        }
+
+        static void Test<T>(IMyComparable<T> t1, T t2)
+        {
+            // ....
+        }
+    }
+
+    public interface IMyComparable<in T>
+    {
+        int Compare(T other);
+    }
+
+    public class Employee : IMyComparable<Employee>
+    {
+        public string Name { get; set; }
+        public int Compare(Employee other)
+        {
+            return Name.CompareTo(other.Name);
+        }
+    }
+
+    public class Programmer : Employee, IMyComparable<Programmer>
+    {
+        public int Compare(Programmer other)
+        {
+            return Name.CompareTo(other.Name);
+        }
+    }
+
+    public class Manager : Employee
+    {
+
+    }
+```
+
+此例中，如果不为接口IMyComparable的泛型参数T指定in 关键字，将会导致Test(p, m)编译错误。由于引入了接口的逆变性，
+使得方法Test支持更多的应用场景。
