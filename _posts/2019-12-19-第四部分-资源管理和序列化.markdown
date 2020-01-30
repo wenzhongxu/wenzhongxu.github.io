@@ -1,0 +1,557 @@
+---
+layout:     post
+title:      "第四部分 资源管理和序列化"
+subtitle:   "《编写高质量C#的建议》学习笔记 第四部分 资源管理和序列化"
+date:       2019-12-19 12:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 学习笔记
+---
+
+### [第四部分 资源管理和序列化](#fourthChapter)  
+##### [资源管理](#resource)
+##### [序列化](#serialize)
+
+
+<p id = "fourthChapter"></p>
+## 第四部分&nbsp;&nbsp;资源管理和序列化
+
+<p id = "resource"></p>
+### 资源管理
+
+资源分为两类：
+
+###### 托管资源 
+由CLR管理分配和释放的资源，即从CLR里new出来的对象
+
+###### 非托管资源 
+不受CLR管理的对象，如Windows内核对象，或者文件、数据库连接、套接字、COM对象等。
+    
+如果类型使用了非托管资源，或者需要显式地释放托管资源，就需要让类型继承接口IDisposeable。
+
+###### Dispose模式：
+```C#
+    public class SampleClass : IDisposable
+    {
+        // 演示创建一个非托管资源
+        private IntPtr nativeResource = Marshal.AllocHGlobal(100);
+        // 演示创建一个托管资源
+        private AnotherResource managedResource = new AnotherResource();
+        private bool disposed = false;
+
+        /// <summary>
+        /// 实现IDisposeable中的Dispose方法
+        /// </summary>
+        public void Dispose()
+        {
+            // 必须为true
+            Dispose(true);
+            // 通知垃圾回收机制不再调用终结器（析构器）
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// 不是必要的，提供一个Close方法仅仅是为了更符合其他语言（如C++）的规范
+        /// </summary>
+        public void Close()
+        {
+            Dispose();
+        }
+
+        /// <summary>
+        /// 必需的，防止程序员忘记了显式调用Dispose方法
+        /// </summary>
+        ~SampleClass()
+        {
+            // 必须为false
+            Dispose(false);
+        }
+        
+        /// <summary>
+        /// 非密封类修饰用protected virtual
+        /// 密封类修饰用private
+        /// </summary>
+        /// <param name="disposing"></param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if(disposed)
+            {
+                return;
+            }
+            if(disposing)
+            {
+                // 清理托管资源
+                if(managedResource != null)
+                {
+                    managedResource.Dispose();
+                    managedResource = null;
+                }
+            }
+            // 清理非托管资源
+            if(nativeResource != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(nativeResource);
+                nativeResource = IntPtr.Zero;
+            }
+            // 让类型知道自己已经被释放
+            disposed = true;
+        }
+
+        public void SamplePublicMethod()
+        {
+            if(disposed)
+            {
+                throw new ObjectDisposedException("SampleClass", "SampleClass is disposed");
+            }
+            // 省略
+        }
+    }
+```
+
+如果类型需要显式释放资源，那么一定要继承IDispose接口。
+
+继承IDispose接口也为实现语法糖using带来便利。以下代码会自动调用Dispose方法：
+```C#
+    using (SampleClass c1 = new SampleClass())
+    {
+        // ...
+    }
+```
+
+这段代码等同于：
+```C#
+    SampleClass c1;
+    try
+    {
+        c1 = new SampleClass();
+        // ...
+    }
+    finally
+    {
+        c1.Dispose();
+    }
+```
+
+如果存在两个类型一直的对象，using可以这样使用：
+```C#
+    using (SampleClass c1 = new SampleClass(), c2 = new SampleClass())
+    {
+        // ...
+    }
+```
+
+如果类型不一致，则如下使用：
+```C#
+    using (SampleClass c1 = new SampleClass())
+    using (SampleAnotherClass c2 = new SampleAnotherClass())
+    {
+        // ...
+    }
+```
+
+以上代码中有个析构函数，叫做类型的终结器。意义在于：我们不能奢望类型调用者肯定会主动调用Dispose方法，基于终结器会被垃圾回收器调用的特点，它被用作资源释放的补救措施。
+
+在.NET中每次使用new操作符创建对象时，CLR都会为该对象在堆上分配内存，一旦这些对象不再被引用，就会回收它们的内存。对于没有继承IDisposeable接口的类型对象，垃圾回收器则会直接释放对象所占用的内存；而对于实现了Dispose模式的类型，在每次创建对象的时候，CLR都会将该对象的一个指针放到终结列表中，垃圾回收期在回收该对象的内存钱，会首先将终结列表中的指针放到一个freachable队列中，同时，CLR还会分配专门的线程读取freachable队列，并调用对象的终结器，只有到这个时候，对象才会真正被标识为垃圾，并且在下一次进行垃圾回收时释放对象占用的内存。
+
+实现了Dispose模式的类型对象，起码要经过两次垃圾回收才能真正地被回收掉，因为垃圾回收机制会首先安排CLR调用终结器。基于这个特点，如果类型提供了显式释放的方法来减少一次垃圾回收，同时可以在终结器中提供隐式清理，以避免调用者忘记调用该方法而带来的资源泄露。
+
+如果已经调用Dispose方法进行显式地资源释放，那么隐式释放资源（终结器）就没有必要再运行了。FCL中的类型GC提供了静态方法SuppressFinalize来通知垃圾回收器。
+
+维护一个私有变量disposed是为了允许多次调用Dispose方法而不抛异常。
+
+对象调用过Dispose方法，并不表示该对象已经被置为null，且被垃圾回收机制回收过内存，已经彻底不存在了。事实上，对象的引用可能还在。但是对象的正常状态已经不存在了，此时如果调用对象公开的方法，应该会抛出一个ObjectDisposedException。如上面代码中SamplePublicMethod方法。
+
+提供一个带布尔参数且受保护的虚方法，是因为考虑了这个类型会被其他类继承的情况。如果类型存在一个子类，子类也许会实现自己的Dispose模式。受保护的虚方法用来提醒子类：必须在实现自己的清理方法时注意到父类的清理工作，即子类需要在自己的释放方法中调用base.Dispose方法。如果不为类型提供这个受保护的虚方法，很有可能让开发者设计子类的时候忽略掉父类的清理工作。所以，基于继承体系的原因，要为类型的Dispose模式提供一个受保护的虚方法。
+
+真正实现资源释放的虚方法是带有一个布尔参数的。用于区别对待托管资源和非托管资源。显式释放资源的是无参Dispose方法，调用参数是true。隐式清理资源的终结器中，调用参数是false。
+
+假设类型分为继承了IDisposeable接口的非普通类型和没有继承的普通类型。非普通类型因为包含非托管资源，所以需要继承IDisposeable接口，但是这里面包含非托管资源的类型本身，而它是一个托管资源。托管资源中的普通类型不需要手动清理，而非普通类型是需要手动清理的（即调用Dispose方法）。
+
+Dispose模式设计模式的思路基于：如果调用者显式调用了Dispose方法，那么类型就该按部就班将自己的资源全部释放。如果忘记调用，类型就假定自己的所有托管资源会全部交给垃圾回收器回收，所以不需要手工清理。
+
+如果类型没有包含任何显式的非托管资源，但本身包含了一个非普通类型，仍需要为其实现一个标准的Dispose模式。除此之外，类型拥有本机资源（即非托管类型资源），也应该继承IDisposeable接口。
+
+垃圾回收机制自动为我们隐式地回收了资源（垃圾回收器会自动调用终结器），为什么还要主动释放资源呢？
+看下面这个例子：
+```C#
+        private void buttonOpen_Click(object sender, EventArgs e)
+        {
+            FileStream fileStream = new FileStream(@"c:\test.txt", FileMode.Open);
+        }
+
+        private void buttonGC_Click(object sender, EventArgs e)
+        {
+            System.GC.Collect();
+        }
+```
+
+buttonGC_Click负责强制回收所有“代”的垃圾。如果连续两次单击打开文件按钮会报错：
+
+    IOException：文件“C:\test.txt”正由另一进程使用，因此该进程无法访问此文件。
+
+如果先单击打开文件的按钮，再单击清理按钮，则运行正常。
+
+为什么呢？
+
+当满足以下条件之一时将发生垃圾回收：
+1. 系统具有低的物理内存。
+2. 由托管堆上已分配的对象使用的内存超出了可接受的范围。
+3. 调用GC.Collect方法。几乎所有情况下，都不必调用此方法，因为垃圾回收器会负责调用它。
+
+垃圾回收机制中一共有3代：0代、1代、2代。第0代包含一些短期生存的对象，如上例中局部变量fileStream就是一个短期生存对象。当buttonOpen_Click退出时，fileStream就被丢到了第0代，但此刻并不进行垃圾回收，但第0代满了的时候，运行时会认为现在低内存的条件已满足，进行垃圾回收。所以，我们永远不知道fileStream这个对象（资源）什么时候会被回收。在回收之前，它实际已经没有用处，却始终占据内存（资源），这对应用系统来说是一种极大的浪费，并且，这种浪费还会干扰程序的正常运行。
+
+不及时释放资源还会带来另一个问题：如果类型继承了IDisposeable接口，垃圾回收机制虽然会自动帮我们释放资源，但是这个过程却延长了，因为它不是在一次回收中完成所有的清理工作。上面例子中，因为fileStream继承了IDisposeable接口，故第一次进行垃圾回收的时候，垃圾回收器会调用fileStream的终结器，然后等待下一次的垃圾回收，这时fileStream对象才有可能会被真正地回收掉。
+
+改进如下：
+```C#
+        private void buttonOpen_Click(object sender, EventArgs e)
+        {
+            FileStream fileStream = new FileStream(@"C:\test.txt", FileMode.Open);
+            fileStream.Dispose();
+        }
+```
+
+但是如果第一行代码抛异常，那么Dispose方法将永远不会执行，再改进如下：
+```C#
+        FileStream fileStream = null;
+        try
+        {
+            fileStream = new FileStream(@"C:\test.txt", FileMode.Open);
+        }
+        finally 
+        {
+            fileStream.Dispose();
+        }
+```
+或
+```C#
+        using(FileStream fileStream = new FileStream(@"C:\test.txt", FileMode.Open))
+        {
+
+        }
+```
+
+针对如下代码：
+```C#
+        private void button1_Click(object sender, EventArgs e)
+        {
+            Method1();
+            Method2();
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            GC.Collect();
+        }
+
+        private void Method1()
+        {
+            SimpleClass s = new SimpleClass("Method1");
+            s = null;
+        }
+
+        private void Method2()
+        {
+            SimpleClass s = new SimpleClass("Method2");
+        }
+
+        class SimpleClass
+        {
+            string m_text;
+
+            public SimpleClass(string text)
+            {
+                m_text = text;
+            }
+
+            ~SimpleClass()
+            {
+                MessageBox.Show(string.Format("SimpleClass Disposed, tag:{0}", m_text));
+            }
+        }
+```
+
+先单击按钮1，在单击按钮2,：
+
+方法Method2中的对象会先被释放，虽然它在Method1之后被调用。
+
+方法Method2中的对象会先被释放，虽然它不像Method1那样将对象引用赋值为null。
+
+CLR托管的应用程序中，存在一个“根”的概念：类型的静态字段、方法参数，以及局部变量都可以作为“根”存在（值类型不能作为“根”，只有引用类型的指针可以）。
+
+上面两个方法中，各自的局部变量在代码运行过程中会分别在内存中创建一个“根”。在一次垃圾回收中，垃圾回收器会沿着线程栈上行（这也解释了为什么Method2中的对象先被释放）检查“根”（线程栈检查完毕后，还会检查所有引用类型对象的静态字段的根集合）。当检查到方法内的“根”时，如果发现没有任何一个地方引用了局部变量，则不管是否已经显式将其赋值为null，都意味着该“根”已经被停止。然后，垃圾回收器会发现该根的引用为空，同时标记该根可被释放，这也标记着Simple类型对象所占用的内存空间可以被释放。所以上面例子中，为s赋值为null没有意义（除了局部变量，方法的参数变量也是这种情况）。JIT编译器是一个优化过的编译器，将局部变量赋值为null在编译的时候会被忽略。
+
+但是在类型的静态字段中，就要及时地将变量赋值为null。如下代码所示：
+```C#
+        private void button1_Click(object sender, EventArgs e)
+        {
+            SimpleClass s = new SimpleClass("test");
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            GC.Collect();
+        } 
+
+        class SimpleClass
+        {
+            static AnotherSimpleClass asc = new AnotherSimpleClass();
+            string m_text;
+
+            public SimpleClass(string text)
+            {
+                m_text = text;
+            }
+
+            ~SimpleClass()
+            {
+                // asc = null;
+                MessageBox.Show(string.Format("SimpleClass Disposed, tag:{0}", m_text));
+            }
+        }
+
+        class AnotherSimpleClass
+        {
+            ~AnotherSimpleClass()
+            {
+                MessageBox.Show("AnotherSimpleClass Disposed");
+            }
+        }
+```
+
+以上代码中，在执行垃圾回收时，当类型SimpleClass对象被回收时，类型的静态字段asc没有被回收。必须启用 asc = null;字段asc才能被正确释放（要单击两次释放按钮，这是因为第一次垃圾回收仅仅执行了终结器）。
+
+上面代码中，asc = null是在终结器中完成的。在实际中，如果一旦静态引用类型参数占用的内存空间比较大，并且用完后不会再使用，便可以立刻将其赋值为null。
+
+还有：**尽量少用静态变量。**
+
+
+<p id = "serialize"></p>
+### 序列化
+
+> 序列化是指：把对象转变成流。反之叫做反序列化。
+
+有一下几方面的原因，决定了要为无用字段标注不可序列化：
+1. 节省空间。类型在序列化后往往会存储到某个地方，如数据库、硬盘或内存中，如果一个字段在反序列化后不需要保持状态，那它就不应该被序列化，这会占用空间资源。
+2. 反序列化后字段信息已经没有意义了。如Windows内核句柄。
+3. 字段因业务上的原因不允许被序列化。如明文密码不应该被序列化后一同保存在文件中。
+4. 如果字段本身所对应的类型在代码中未被设定为可序列化，那它就该被标注不可序列化，否则运行时会抛出异常SerializationException。
+
+标注不可序列化代码如下：
+```C#
+    [Serializable]
+    class Person
+    {
+        private string name;
+        public string Name
+        {
+            get
+            {
+                return name;
+            }
+            set
+            {
+                if(NameChanged != null)
+                {
+                    NameChanged(this, null);
+                }
+                name = value;
+            }
+        }
+
+        public int Age { get; set; }
+
+        [NonSerialized]
+        private Department department;
+        public Department Department
+        {
+            get
+            {
+                return department;
+            }
+            set
+            {
+                department = value;
+            }
+        }
+
+        [field: NonSerialized]
+        public event EventHandler NameChanged;
+    }
+```
+
+###### 注意
+1. 由于属性本质上是方法，所以不能将NonSerialized特性应用于属性上，在标识某个属性不能被序列化时，自动实现的属性不能使用。
+2. 要让事件不能被序列化，需要用改进的特性语法 field:NonSerialized。
+    
+可以利用定制特性减少可序列化的字段
+
+在System.Runtime.Serialization命名空间下，有四个特性：
+1. OnDeserializedAttribute，当它应用于某方法时，会指定在对象反序列化后立即调用此方法。
+2. OnDeserializingAttribute，当它应用于某方法时，会指定在反序列化对象时调用此方法。
+3. OnSerializedAttribute，如果将对象图应用于某方法，则应指定在序列化该对象图后是否调用该方法。
+4. OnSerializingAttribute，当它应用于某方法时，会指定在对象序列化前调用此方法。
+
+例如Person由字段ChineseName、FirstName和LastName组成，但是ChineseName可以由后两者推出，所以ChineseName不需要被序列化：
+```C#
+        [Serializable]
+        class Person
+        {
+            public string FirstName;
+            public string LastName;
+            [NonSerialized]
+            public string ChineseName;
+
+            [OnDeserializedAttribute]
+            void OnSerialized(StreamingContext context)
+            {
+                ChineseName = string.Format("{0} {1}", LastName, FirstName);
+            }
+        }
+```
+
+当特性不足以满足自定义序列化的要求的时候，就需要继承ISerializable。
+
+如果格式化器在序列化一个对象的时候，发现对象继承了ISerializable接口，会忽略掉类型所有的序列化特性，转而调用类型的GetObjectData方法来构造一个SerializationInfo对象，方法内部负责向这个对象添加所有需要序列化的字段（“添加这个词可能不恰当，因为在添加之前，可以随意处置这个字段”）。
+
+上面Person类的实现方式将变成如下：
+```C#
+        [Serializable]
+        public class Person : ISerializable
+        {
+            public string FirstName;
+            public string LastName;
+            public string ChineseName;
+
+            public Person()
+            {
+
+            }
+
+            protected Person(SerializationInfo info, StreamingContext context)
+            {
+                FirstName = info.GetString("FirstName");
+                LastName = info.GetString("LastName");
+                ChineseName = string.Format("{0} {1}", LastName, FirstName);
+            }
+
+            void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+                info.AddValue("FirstName", FirstName);
+                info.AddValue("LastName", LastName);
+            }
+        }
+```
+
+在GetObjectData中处理序列化，然后在一个带参数的构造方法中处理反序列化。虽然在接口ISerializable中没有地方指出需要这样的构造器，但这确实需要，除非不打算反序列化回来。
+
+如果要将Person对象序列化，然后反序列化成另一个对象：PersonAnother。就需要两个类型都要实现ISerializable接口，在Person类的GetObjectData方法中处理序列化，在PersonAnother的受保护构造方法中反序列化。如下：
+```C#
+        [Serializable]
+        class PersonAnother : ISerializable
+        {
+            public string Name { get; set; }
+
+            protected PersonAnother(SerializationInfo info, StreamingContext context)
+            {
+                Name = info.GetString("Name");
+            }
+            void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+
+            }
+        }
+
+        [Serializable]
+        public class Person : ISerializable
+        {
+            public string FirstName;
+            public string LastName;
+            public string ChineseName;
+
+            public Person()
+            {
+
+            }
+
+            protected Person(SerializationInfo info, StreamingContext context)
+            {
+
+            }
+
+            void ISerializable.GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+                info.SetType(typeof(PersonAnother)); // 非常重要，负责告诉序列化器：我要被反序列化为PersonAnother
+                info.AddValue("Name", string.Format("{0} {1}", LastName, FirstName));
+            }
+        }
+```
+
+ISerializable接口如果运用得当，在版本升级中，它能处理类型因为字段变化而带来的问题。
+
+如果要实现继承自ISerializable的类型Employee有一个父类Person，假设Person没有实现序列化，而子类要求能够满足序列化的场景。
+
+在实现ISerializable的子类型应负责父类的序列化。
+
+假设Person类型已经实现了ISerializable接口，问题处理起来会比较容易，在子类中只需要调用父类受保护的构造方法和GetObjectData方法就可以了。
+```C#
+        [Serializable]
+        public class Person : ISerializable
+        {
+            public string Name { get; set; }
+
+            public Person()
+            {
+
+            }
+
+            protected Person(SerializationInfo info, StreamingContext context)
+            {
+                Name = info.GetString("Name");
+            }
+
+            public virtual void GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+                info.AddValue("Name", Name);
+            }
+        }
+
+        [Serializable]
+        public class Employee : Person, ISerializable
+        {
+            public int Salary { get; set; }
+
+            public Employee()
+            {
+
+            }
+
+            protected Employee(SerializationInfo info, StreamingContext context) : base(info, context)
+            {
+                Salary = inf.GetInt32("Salary");
+            }
+
+            public override void GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+                base.GetObjectData(info, context);
+                info.AddValue("Salary", Salary);
+            }
+        }
+```
+
+如果父类没有实现ISerializable接口，则需要如下实现（比较不可取）：
+```C#
+    protected Employee(SerializationInfo info, StreamingContext context)
+    {
+        Name = info.GetString("Name"); // 如果没有name，会取不到name属性值
+        Salary = inf.GetString("Salary");
+    }
+
+    public void GetObjectData(SerializationInfo info, StreamingContext context)
+    {
+        info.AddValue("Name", Name); // 如果没有name，会取不到name属性值
+        info.AddValue("Salary", Salary);
+    }
+```
