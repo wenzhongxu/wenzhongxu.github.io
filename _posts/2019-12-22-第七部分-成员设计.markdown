@@ -1,0 +1,350 @@
+---
+layout:     post
+title:      "第七部分 成员设计"
+subtitle:   "《编写高质量C#的建议》学习笔记 第七部分 成员设计"
+date:       2019-12-22 12:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 学习笔记
+---
+
+不要为抽象类提供公开的构造方法。
+
+抽象类可以有构造方法。即使没有为抽象类指定构造方法，编译器也会生成一个默认的protected构造方法。
+
+下面是一个标准的最简单的抽象类：
+```C#
+        abstract class MyAbstractClass
+        {
+            protected MyAbstractClass(){}
+        }
+```
+
+抽象类的构造方法不应该是public或internal的。抽象类设计的本意只能让子类继承，而不是用于生成实例对象的。
+
+如果抽象类是public或internal的，它对于其它类型来说就是可见的，这是不必要的，也是多余的。抽象类只需对子类可见就可以了。
+
+字段和属性有本质的区别：属性是方法。
+
+{ get; set; }编译之后，实际会生成一个静态字段和两个方法。
+
+属性相比较于字段，具有如下优势：
+1. 可以为属性添加代码。可以在方法内对设置或获取属性的过程进行更多精细化的控制。
+2. 可以让属性支持线程安全。要让属性变成线程安全的，可以让类型自身去实现。而要让字段支持线程安全，只能靠调用者本身实现。
+3. 属性得到了VS编辑器的支持，还得到了实现自动属性这种功能。自动属性的特点在LINQ中得到广泛应用，尤其是匿名类型中，它只能实现只读的自动属性，而不支持字段。
+4. 从设计的角度（面向对象的角度），公开的字段也应该使用属性。改变字段的状态，类型不会被通知到；而改变属性的值，类型支持则会被通知。
+
+综上，如果一个类型存在一个可见字段，应该被重构为属性。如果某个属性仅仅对内部可见，而且不涉及上面内容，建议使用字段。
+
+数组和集合作为属性存在会引起这样的一个分歧：如果属性时只读的，我们通常会认为它是不可改变的，但是如果将只读属性应用于数组和集合，而元素内容和数量却仍旧可以随意更改。如下所示：
+```C#
+        static void Main(string[] args)
+        {
+            Company microsoft = new Company();
+            microsoft.Employees[0].Name = "LuMinji";
+            foreach (var item in microsoft.Employees)
+            {
+                Console.WriteLine(item.Name);
+            }
+            Console.ReadKey();
+        }
+        class Employee
+        {
+            public string Name { get; set; }
+        }
+        class Company
+        {
+            public Company()
+            {
+                Employees = new List<Employee>()
+                {
+                    new Employee(){ Name = "Bill Gates" }
+                };
+            }
+            public IList<Employee> Employees { get; private set; }
+        }
+```
+
+我们可以随意对Employees进行集合操作，它不变的只是自身的引用而已。
+
+如果某个类型含有集合概念的属性，那么它的可见性应该为private或protected，并且应该是一个字段。类型对外只公开必要的方法来操作这个集合。
+
+如果一定要将某个数组或集合设置为属性，那么应该考虑将其置为只读。
+
+构造方法应初始化主要属性和字段。
+
+类型的属性应该在构造方法调用完毕之前完成初始化工作。如果字段没有在初始化器中设置初始值，那么它就应该在构造方法中初始化。
+
+类型一旦被实例化，应该被视为具有完整的行为和属性。就像一旦一只猫健康出生，就应该具备猫爪和猫尾巴，而不是在查看这只猫的尾巴是得到一个null。
+
+以Company为例：
+```C#
+        class Company
+        {
+            Employee specialA = new Employee90 { Name = "Mike" };
+            Employee specialB;
+            public Employee CEO { get; set; }
+
+            public Company()
+            {
+                CEO = new Employee() { Name = "Steve" }; // 只要存在公司实体，就会有一个CEO
+                specialB = new Employee() { Name = "Rose" };
+            }
+        }    
+```
+        
+多态要求子类具有与基类方法同名的方法，而override和new的作用就是：
+
+如果子类中的方法前面带有new关键字，则该方法被定义为独立于基类的方法。
+
+如果子类中的方法前面带有override关键字，则子类的对象将调用该方法，而不是调用基类方法。
+```C#
+        public class Shape
+        {
+            public virtual void MethodVirtual()
+            {
+                Console.WriteLine("base MethodVirtual call");
+            }
+
+            public void Method()
+            {
+                Console.WriteLine("base Method call");
+            }
+        }
+
+        class Circle : Shape
+        {
+            public override void MethodVirtual()
+            {
+                Console.WriteLine("circle override MethodVirtual");
+            }
+        }
+
+        class Rectangle : Shape
+        {
+
+        }
+
+        class Triangle : Shape
+        {
+            public new void MethodVirtual()
+            {
+                Console.WriteLine("triangle new MethodVirtual");
+            }
+
+            public new void Method()
+            {
+                Console.WriteLine("triangle new Method");
+            }
+        }
+
+        class Diamond : Shape
+        {
+            public void MethodVirtual()
+            {
+                Console.WriteLine("Diamond default MethodVirtual");
+            }
+
+            public void Method()
+            {
+                Console.WriteLine("Diamond default Method");
+            }
+        }
+```
+
+Circle：
+```C#
+        Shape s = new Circle();   Circle circle = new Circle();
+        s.MethodVirtual();        circle.MethodVirtual();
+        s.Method();               circle.Method();
+```
+
+不管子类是否转型为Shape，调用的都是子类的方法。
+
+Rectangle：
+    
+    无任何处理，调用的都是基类的方法。
+
+Triangle：
+```C#
+        Shape s = new Triangle();   Triangle triangle = new Triangle();
+        s.MethodVirtual();        triangle.MethodVirtual();
+        s.Method();               triangle.Method();
+```
+
+子类new了父类的方法，故子类方法和基类方法完全没有关系了，只要转型为父类，调用的都是父类的方法。
+
+Diamond：
+    
+    包含了两个和基类一模一样的方法，并且没有额外的修饰符。编辑器会提出警示，但不影响运行。
+```C#
+        Shape s = new Diamond(); 
+        s.MethodVirtual();  
+        s.Method();      
+```
+
+编辑器会默认new的效果，输出和显示设置为new时一样。调用的是基类的方法。
+
+在构造方法中调用虚成员会带来一些意想不到的错误，所以应该避免在构造方法中调用虚成员。
+
+成员应优先考虑公开基类型或接口。
+
+类型成员如果优先考虑公开基类型或接口，会让类型支持更多的应用场合。
+
+典型的例子是集合的功能操作。以一个最简单的操作Empty为例。该功能要求删除集合中的所有元素，然后返回一个干净的集合。如果不返回基类型或接口的话，则要求为每一个集合类型都实现一个这样的方法。
+
+现在微软在FCL中实现了一个静态类型Enumerable：
+```C#
+        public static IEnumerable<TResult> Empty<TResult>()
+        {
+            return EmptyEnumerable<TResult>.Instance;
+        }
+```
+
+因为使用了泛型接口IEnumerable，所以现在所有的集合子类都可以不实现自己的Empty方法了。
+
+同样道理，方法的参数也应该考虑基类型或接口。
+
+还是以Enumerable类型为例，它的成员方法中只要涉及需要操作集合对象的地方，在参数上都要使用IEnumerable泛型接口：
+```C#
+        public static IEnumerable<TSource> Take<TSource>(this IEnumerable<TSource> source, int count)
+        {
+            if (source == null)
+            {
+                throw Error.ArgumentNull("source");
+            }
+            return TakeIterator<TSource>(source, count);
+        }
+```
+
+该方法用于获取集合指定数量的一个子集。正是因为存在这个扩展方法，才可以对所有的泛型集合类型进行Take操作。
+
+如果方法的参数数目不定，且参数类型一致，可以使用params关键字减少重复的参数声明。
+```C#
+        void Method1(string str, object a)
+        {
+
+        }
+
+        void Method2(string str, object a, object b)
+        {
+            
+        }
+
+        void Method3(string str, object a, object b, object c)
+        {
+            
+        }
+```
+
+可以合并成：
+```C#
+        void Method(string str, params object[] args)
+        {
+
+        }
+```
+    
+重写时不应使用子类参数。
+
+重写时如果使用了子类参数，可能会偏离设计者的预期目标。
+```C#
+        class Employee
+        {
+
+        }
+
+        class Manager : Employee
+        {
+
+        }
+
+        class Salary
+        {
+            public void SetSalary(Employee e)
+            {
+                Console.WriteLine("职员调薪");
+            }
+        }
+
+        class ManagerSalary : Salary
+        {
+            public void SetSalary(Manager m)
+            {
+                Console.WriteLine("经理调薪");
+            }
+        }
+```
+当调用时：
+```C#
+        ManagerSalary m = new ManagerSalary();
+        m.SetSalary(new Employee()); // 本意是要经理调薪，实际却是员工调薪。
+```
+要避免这种设计，应当仍旧使用Employee类型参数，起码能让编辑器提醒我们使用new关键字。
+
+静态方法和实例方法没有区别。
+    
+使用扩展方法向现有类型“添加”方法。
+
+以往采用包装器类的编码：
+```C#
+        public class static class StudentConverter
+        {
+            public static string GetSexString(Student student)
+            {
+                return student.GetSex() == true ? "男" : "女";
+            }
+        }
+        
+        public class Student
+        {
+            public bool GetSex()
+            {
+                return false;
+            }
+        }
+```
+
+将bool值的结果包装成一个字符串，就是包装器的方法，调用时：
+```C#
+        StudentConverter.GetSexString(student);
+```
+
+更优美的形式，更好地方式就是扩展方法：
+```
+        public static class StudentExtension
+        {
+            public static string GetSexString(this Student student)
+            {
+                return student.GetSex() == true ? "男D" : "女?";
+            }
+        }
+```
+
+调用：
+```C#
+        Student student = new Student();
+        student.GetSexString();
+```
+除了让调用像调用类型自身的方法一样去调用扩展方法外，还有一些其他的主要优点：
+1. 可以扩展密封类型
+2. 可以扩展第三方程序集中的类型
+3. 扩展方法可以避免不必要的深度继承体系
+
+必须遵循的要求：
+1. 扩展方法必须在静态类中，且该类不能是一个嵌套类
+2. 扩展方法必须是静态的
+3. 扩展方法的第一个参数必须是要扩展的类型，而且必须加上this关键字
+4. 不支持扩展属性、事件
+
+扩展方法还能够扩展接口：
+```C#
+        public static IEnumerable<TResult> Select<TSource, TResult>(this IEnumerable<TSource> source, Func<TSource, int, TResult> selector)
+        {
+            // ...
+        }
+```
+
+它相当于让继承自IEnum<T>接口的任何子类型都拥有了Select方法，而这些Select方法在调用者看来，就像是IEnumerable<T>接口所声明的一样。
