@@ -1,0 +1,342 @@
+---
+layout:     post
+title:      "第八部分 类型设计"
+subtitle:   "《编写高质量C#的建议》学习笔记 第八部分 类型设计"
+date:       2019-12-23 12:00:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 学习笔记
+---
+
+接口和抽象类具有一些区别：
+1. 接口支持多继承，抽象类则不能。
+2. 接口可以包含方法、属性、索引器、事件的签名，但不能有实现，抽象类则可以。
+3. 接口在增加新方法后，所有的继承者都必须重构，否则编译不会通过，而抽象类则不需要。
+
+区别导致两者应用场景各有不同：
+1. 如果对象存在多个功能相近且关系紧密的版本，则使用抽象类。
+2. 如果对象关系不紧密，但是若干功能拥有共同的声明，则使用接口。
+3. 如果类适合于提供丰富功能的场合，接口则更倾向于提供单一的一组功能。
+
+从某种角度来说，抽象类比接口更具备代码的重用性。子类无需编写代码即可具备一个共性的行为。
+
+另一个好处是，如果为基类增加一个方法，则继承该基类的所有子类自然就会具备这个额外增加的方法，而接口不能。如果要为接口增加一个方法，必须修改所有的子类。所以，接口一旦被设计出来，就应该是不变的。抽象基类则可以随着版本升级，增加一些功能。
+
+接口的作用更倾向于说明类型有某个或某组功能。接口只负责声明，而抽象基类往往还要负责实现。
+
+接口的职责必须单一，接口中的方法应该尽可能简练。好处是可以让它们总是能被尽可能多的类型使用到，并且这些类型之间可以毫无关系。
+
+以IDisposable为例：
+```C#
+        public interface IDisposable
+        {
+            void Dispose();
+        }
+```
+它提供了一种行为方式上的契约，即**类型需要被显式释放**。
+
+Socket需要被释放，DbConnection需要被释放，但是显然，它们是两种完全不同的类型。而抽象类则不一样，我们不应该设计出两个毫无关系却同时继承自某个抽象类的子类。
+
+抽象类解决的是“Is a”，接口解决的是“Can do”。
+
+组合的代码定义:
+```C#
+        class Context
+        {
+            // 省略
+        }
+        class CultureInfo
+        {
+            // 省略
+        }
+        class Thread
+        {
+            private Context m_Context;
+            private CultureInfo m_CurrentCulture;
+            // 省略
+        }
+```
+继承是“Is a”，组合则是“Has a”。
+
+面向对象的多态性使得继承具有提高代码的复用性，易于扩展等优点。
+
+但子类天然具有基类的公开接口，正好破坏了面向对象中的“封装性”。一个类如果继承体系达到3层就可以考虑停止了。组合的优势就是，随着项目的发展，组合良好的封装性使类型可以对外宣称：我只做一件事。
+
+组合的另一个优势是，可以组合多个其他类型。不过，如果组合太多类型，就意味着当前的类很有可能做了太多事情，它就需要被拆分为两个类了。
+
+应该采用多态代替条件语句。
+
+参照计算器的实现（先设计一个计算抽象类，所有运算符类全部继承这个抽象类，重写计算方法，然后根据不同运算符进入不同的计算）。
+
+使用私有构造函数强化单例。
+
+一个类型只生成一个实例对象。
+```C#
+        static void Main(string[] args)
+        {
+            Singleton.Instance.SampleMethod();
+        }
+
+        public sealed class Singleton
+        {
+            static Singleton instance = null;
+
+            public static Singleton Instance
+            {
+                get
+                {
+                    return instance == null ? new Singleton() : instance;
+                }
+            }
+
+            public void SampleMethod()
+            {
+                // 省略
+            }
+        }
+```
+
+单例首先会提供一个private的自身类型变量。在Instance属性中，它是负责创建类型本身的唯一实例。而如果外部需要使用该类型，则必须通过Instance属性，是必须。
+
+上面代码中存在一个问题：虽然在调用者代码中，通过Instance属性来获取类型实例，但是，类型没有防止自身在外部被创建。由于类型Singleton没有提供构造方法，所以编译器为其默认创建了一个构造器，而该默认构造器的访问修饰符是public的。这就无法避免下面这样的代码在外部被使用了：
+```C#
+        Singleton s = new Singleton();
+        s.SampleMethod();
+```
+
+这就失去了单例的意义。实际上会导致系统中可能存在多个单例对象，所以必须为单例类型添加一个private的构造方法：
+```C#
+        public sealed class Singleton
+        {
+            static Singleton instance = null;
+
+            // 限制实例在外部被创建
+            private Singleton()
+            {
+
+            }
+
+            public static Singleton Instance
+            {
+                get
+                {
+                    return instance == null ? new Singleton() : instance;
+                }
+            }
+            
+            public void SampleMethod()
+            {
+                // 省略
+            }
+        }
+```
+
+但是这个单例并不是线程安全的，在多线程情况下，还有可能产生第二个实例。关于单例的一个著名技术就是“双锁定”技术，在用双锁定后，单例的线程安全版本为：
+```C#
+        public sealed class Singleton
+        {
+            static Singleton instance = null;
+            static readonly object padlock = new object();
+
+            Singleton()
+            {
+
+            }
+
+            public static Singleton Instance
+            {
+                get
+                {
+                    if(instance == null)
+                    {
+                        lock(padlock)
+                        {
+                            if(instance == null)
+                            {
+                                instance = new Singleton();
+                            }
+                        }
+                    }
+                    return instance;
+                }
+            }
+        }
+```
+最后，单例应该同时是一个sealed类型。
+    
+为静态类添加静态构造函数。
+
+静态构造方法与实例构造方法相比，有几个自己的特点：
+1. 只被执行一次，且在第一次调用类成员之前被运行时执行。
+2. 代码无法调用它，不像实例构造方法使用new关键字就可以被执行。
+3. 没有访问标识符。
+4. 不能带任何参数。
+
+使用静态构造方法的好处是，可以初始化静态成员并捕获在这过程中发生的异常。而使用静态成员初始化器则不能再类型内部捕获异常了。
+```C#
+        static void Main(string[] args)
+        {
+            SampleClass.SampleMethod();
+            Console.ReadKey();
+        }
+        static class SampleClass
+        {
+            static FileStream fileStream = File.Open(@"c:\temp.txt", FileMode.Open);
+
+            public static void SampleMethod()
+            {}
+        }
+```
+
+如果文件不存在，代码会抛出异常。理想做法是，在类型SampleClass内部对fileStream进行初始化。提供静态的构造方法：
+```C#
+        static class SampleClass
+        {
+            static FileStream fileStream;
+
+            static SampleClass()
+            {
+                try
+                {
+                    fileStream = File.Open(@"c:\temp.txt", FileMode.Open);
+                }
+                catch(FileNotFoundException err)
+                {
+                    Console.WriteLine(err.Message);
+                    // 处理异常
+                }
+            }
+            public static void SampleMethod()
+            {}
+        }
+```
+
+如果类型初始化不成功，会在类型的内部处理完毕，并不会将异常抛给调用者。因为有时候调用者甚至都不知道类型需要初始化什么内容，所以将初始化失败的异常处理交给上层是不合理的。
+
+对静态引用类型的初始化应该使用静态构造方法。但是，乳沟一个静态类只有值类型的变量，可以放宽这种限制。
+
+有观点认为：静态类可以作为单例模式的一种实现方式。事实上，这是不妥当的。单例是一个实例对象，而静态类并不满足这点。
+
+静态类也直接违反面向对象三大特性中的继承和多态。
+
+C#中，静态类不会被认作是个“真正的对象”。而单例不会存在任何这样的问题。单例是一个实例对象，仅仅因为特殊要求，被自己实现为整个系统中只有一个对象。
+
+将类型标识为sealed能够阻止类型被其他类型继承。能够有效控制继承的深度。一个类型如果确信没有必要被继承，应该及时将其变为密封类。（在密封类中暑申明protected方法也是没有必要的）
+
+谨慎使用嵌套类。
+
+使用嵌套类的原则是：当某类型需要访问另一个类型的私有成员时，才将它实现为嵌套类。
+
+一个典型的例子是在实现集合时（如ArrayList），要为集合实现迭代器，这时用到了嵌套类：
+```C#
+        public class ArrayList : IList, ICollection, IEnumerable, ICloneable
+        {
+            // 省略
+            public virtual IEnumerator GetEnumerator()
+            {
+                return new ArrayListEnumeratorSimple(this);
+            }
+
+            //  如果必须出现一个嵌套类，应该将其实现为private。也就是说除了包含它的外部类以外，不应该让任何
+            // 其他类型可以访问到它。嵌套类的服务对象应该仅限于当前类型。
+            [Serializable]
+            private sealed class ArrayListEnumeratorSimple : IEnumerator, ICloneable
+            {
+                // 省略
+                internal ArrayListEnumeratorSimple(ArrayList list)
+                {
+                    // 访问了若干外部类ArrayList的私有成员
+                    this.list = list;
+                    this.index = -1;
+                    this.version = list._version;
+                    this.isArrayList = list.GetType() == typeof(ArrayList);
+                    this.currentElement = dummyObject;
+                }
+            }
+        }
+```
+
+枚举最大的优点在于它的类型是值类型。相比较引用类型来说，它可以在关键算法中提升性能，因为它不需要创建在“堆”中。但是，如果不考虑这方面的因素，不妨让类（引用类型）来代替枚举。
+
+如代替Week的枚举：
+```C#
+        class Week
+        {
+            public static readonly Week Monday = new Week(0);
+            public static readonly Week Tuesday = new Week(1);
+            // 省略
+
+            private int _infoType;
+
+            // private构造方法有效阻止在类型外部生成类的实例，使其行为更接近于枚举
+            private Week(int infoType)
+            {
+                _infoType = infoType;
+            }
+        }
+```
+
+类Week相较于枚举Week的优点在于，能够添加方法或重写基类方法，以便提供更丰富的功能。
+
+如果应用场合满足如下特性，我们就应该更多地考虑使用枚举：
+1. 效率。枚举是值类型。
+2. 类型用于内部，不需要增加更多的行为和属性。
+3. 类型元素不需要提供附加的特性。
+
+避免双向耦合。
+
+双向耦合是指两个类型之间相互引用：
+```C#
+            class A
+            {
+                B b;
+                public void MethodA()
+                {
+                    b.MethodB();
+                }
+            }
+
+            class B
+            {
+                A a;
+                public void MethodB()
+                {
+                    a.MethodA();
+                }
+            }
+```
+
+常见的解耦方式就是提炼出一个接口。如果A,B类型分别在两个项目中，则提炼出来的这个借口要放置到一个新起的项目中，然后让A，B所在的两个项目分别引用这个接口所在的项目。
+
+解耦后代码：
+```C#
+        interface ISample
+        {
+            // 规范了类型A的行为
+            void MethodA();
+        }
+
+        // 让A继承自ISample
+        class A : ISample
+        {
+            B b;
+            public void MethodA()
+            {
+                b.MethodB();
+            }
+        }
+
+        // 针对抽象编程
+        class B
+        {
+            ISample a;
+            public void MethodB()
+            {
+                a.MethodA();
+            }
+        }
+```
+
+将显示世界中的对象抽象为类，将可复用对象圈起来就是命名空间。
