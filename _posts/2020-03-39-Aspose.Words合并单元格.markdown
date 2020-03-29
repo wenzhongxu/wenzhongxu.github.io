@@ -1,0 +1,190 @@
+---
+layout:     post
+title:      "使用Aspose.Words合并Word单元格"
+subtitle:   "生成Word文件时，如何在合并表格的单元格"
+date:       2020-03-29 11:52:00
+author:     "WenzhongXu"
+header-img: "img/post-bg-2015.jpg"
+tags:
+    - C#
+    - 经验总结
+---
+
+Aspose.Words.Tables.CellMerge有三个枚举值，用于合并单元格：
+```C#
+namespace Aspose.Words.Tables
+{
+    public enum CellMerge
+    {
+        None = 0,  // 表示无需合并单元格
+        First = 1, // 当前单元格是合并单元格的第一个单元格
+        Previous = 2 // 表示当前单元格向前合并
+    }
+}
+```
+
+Aspose.Words.Tables.CellFormat分别提供了VerticalMerge和HorizontalMerge两个属性，分别表示竖直合并和横向合并。
+```C#
+namespace Aspose.Words.Tables
+{
+    public class CellFormat
+    {
+        // ....
+        public CellMerge VerticalMerge { get; set; }
+        public CellMerge HorizontalMerge { get; set; }
+        // ....
+    }
+}
+```
+所以通过如下代码即可实现Word的单元格合并。代码如下：
+```C#
+    public void CreateTableDemo()
+        {
+            string tmplFile =
+                @"C:\Users\wenzhong.xu\Desktop\TableDemoFile.docx";//word模板
+            var now = DateTime.Now;
+            var fileName = "TableCreated.docx";
+
+            string downloadFile = @"C:\Users\wenzhong.xu\Desktop\" + fileName; //提供给用户下载的文件路径
+            if (!File.Exists(tmplFile))
+            {
+
+            }
+            if (!Directory.Exists(Path.GetDirectoryName(downloadFile)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(downloadFile));
+            }
+            File.Copy(tmplFile, downloadFile, true);//将模板内容复制给用户下载的word中
+            
+            Document doc = new Document(downloadFile);
+            DocumentBuilder builder = new DocumentBuilder(doc);
+            
+            builder.MoveToBookmark("TABLEMARK"); // 移动到书签处
+
+            builder.StartTable(); // 开始创建表格
+
+            /**第一个单元格 start **/
+            builder.InsertCell(); // 首先插入一个单元格
+            // 设置单元格边框
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.First; // 竖直方向合并的第一个单元格
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None;
+
+            // 设置单元格内容对齐方式
+            builder.CellFormat.VerticalAlignment = Aspose.Words.Tables.CellVerticalAlignment.Center;
+            builder.ParagraphFormat.Alignment = ParagraphAlignment.Center;
+
+            builder.Write("RowSpan 2 , Cell 0 Content"); // 写入内容
+            /**第一个单元格 end **/
+
+            /**第二个单元格 start **/
+            builder.InsertCell(); // 插入第二个单元格
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.First; // 水平方向的合并是第一个单元格
+            builder.CellFormat.VerticalAlignment = Aspose.Words.Tables.CellVerticalAlignment.Center;
+            builder.ParagraphFormat.Alignment = ParagraphAlignment.Center;
+            builder.Write("Row 1, Cell 1 Content.");  // 写入内容
+            /**第二个单元格 end **/
+
+            /**第三个单元格 start **/
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.Previous; // 水平方向的合并是合并向前一个单元格
+            // 因为是跟前一个单元格合并了，无需写入内容
+            /**第三个单元格 end **/
+
+            /**第四个单元格 start **/
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.Previous; // 水平方向的合并是合并向前一个单元格
+            
+            /**第四个单元格 end **/
+            builder.EndRow(); // 这一行结束了
+
+            
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.Previous; // 竖直方向的合并是合并向前一个单元格，即向上合并单元格
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None; // 水平方向的合并是第一个单元格，即不合并
+            
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.VerticalAlignment = Aspose.Words.Tables.CellVerticalAlignment.Center;
+            builder.ParagraphFormat.Alignment = ParagraphAlignment.Center;
+            builder.Write("Row 2, Cell 1 Content.");
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.Write("Row 2, Cell 2 Content.");
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.First;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.Write("Row 2, Cell 3 Content.");
+
+            builder.EndRow();
+
+            //builder.insert
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.VerticalAlignment = Aspose.Words.Tables.CellVerticalAlignment.Center;
+            builder.ParagraphFormat.Alignment = ParagraphAlignment.Center;
+            builder.Write("Row 3, Cell 0 Content.");
+
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.First;
+            builder.CellFormat.VerticalAlignment = Aspose.Words.Tables.CellVerticalAlignment.Center;
+            builder.ParagraphFormat.Alignment = ParagraphAlignment.Center;
+            builder.Write("Row 3, Cell 1 Content.");
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.None;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.Previous;
+            //builder.Write("Row 3, Cell 2 Content.");
+
+            builder.InsertCell();
+            builder.CellFormat.Borders.LineStyle = LineStyle.Single;
+            builder.CellFormat.Borders.Color = Color.Black;
+            builder.CellFormat.VerticalMerge = Aspose.Words.Tables.CellMerge.Previous;
+            builder.CellFormat.HorizontalMerge = Aspose.Words.Tables.CellMerge.None;
+            //builder.Write("Row 2, Cell 3 Content.");
+            builder.EndRow();
+
+            builder.EndTable();//表格结束
+
+            doc.Save(downloadFile);//保存word
+        }
+```
+实现效果如下：
+![CreatedTable](/img/dotNet/wordDemo.png)
