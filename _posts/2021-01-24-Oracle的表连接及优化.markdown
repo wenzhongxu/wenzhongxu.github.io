@@ -11,7 +11,9 @@ tags:
 
 ### 一、表连接的几种常见类型
 1、嵌套循环（Nested Loops Join）
+
 2、哈希连接（Hash Join）
+
 3、排序合并（Merge Sort Join）
 
 ### 二、各类连接的差异
