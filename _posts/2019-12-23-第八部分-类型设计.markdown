@@ -2,6 +2,7 @@
 layout:     post
 title:      "第八部分 类型设计"
 subtitle:   "《编写高质量C#的建议》学习笔记 第八部分 类型设计"
+categories: .NET
 date:       2019-12-23 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"

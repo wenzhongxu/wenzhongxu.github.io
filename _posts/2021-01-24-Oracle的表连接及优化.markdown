@@ -2,6 +2,7 @@
 layout:     post
 title:      "Oracle的表连接及优化"
 subtitle:   "表关联中的几种连接方式及对应的优化方法"
+categories: Oracle
 date:       2021-01-24 15:32:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"

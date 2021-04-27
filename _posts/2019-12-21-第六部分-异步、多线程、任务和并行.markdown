@@ -2,6 +2,7 @@
 layout:     post
 title:      "第六部分 异步、多线程、任务和并行"
 subtitle:   "《编写高质量C#的建议》学习笔记 第六部分 异步、多线程、任务和并行"
+categories: .NET
 date:       2019-12-21 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"

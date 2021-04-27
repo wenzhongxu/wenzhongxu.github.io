@@ -2,6 +2,7 @@
 layout:     post
 title:      "Oracle之Btree索引"
 subtitle:   "什么是数据库索引？索引有什么用？为什么索引查询效率高？"
+categories: Oracle
 date:       2019-12-17 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"

@@ -1,16 +1,11 @@
 ---
 layout:     post
 title:      "Oracle基础体系"
-subtitle:   " 对Oracle基础体系的一些解读"
+categories: Oracle
 date:       2019-12-16 12:00:00
 author:     "WenzhongXu"
-header-img: "img/post-bg-2015.jpg"
 tags:
     - Oracle
----
-
-The purpose of this post is to help you make sure all of HTML elements can display properly. If you use CSS reset, don't forget to redefine the style by yourself.
-
 ---
 
 > 臣之所好者，道也，进乎技矣。

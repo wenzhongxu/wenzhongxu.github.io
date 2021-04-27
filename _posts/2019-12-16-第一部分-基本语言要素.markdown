@@ -2,6 +2,7 @@
 layout:     post
 title:      "第一部分 基本语言要素"
 subtitle:   "《编写高质量C#的建议》学习笔记 第一部分 基本语言要素"
+categories: .NET
 date:       2019-12-16 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"

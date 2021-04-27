@@ -2,6 +2,7 @@
 layout:     post
 title:      "第五部分 异常与自定义异常"
 subtitle:   "《编写高质量C#的建议》学习笔记 第五部分 异常与自定义异常"
+categories: .NET
 date:       2019-12-20 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"

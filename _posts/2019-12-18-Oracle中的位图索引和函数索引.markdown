@@ -2,6 +2,7 @@
 layout:     post
 title:      "Oracle中的位图索引和函数索引"
 subtitle:   "简单介绍位图索引和函数索引"
+categories: Oracle
 date:       2019-12-17 12:00:00
 author:     "WenzhongXu"
 header-img: "img/post-bg-2015.jpg"
