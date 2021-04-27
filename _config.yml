@@ -213,8 +213,11 @@ font:
 # Social Links
 # Key is the link label showing to end users.
 # Value is the target link (E.g. GitHub: https://github.com/iissnan)
-#social:
+social:
   #LinkLabel: Link
+  GitHub: https://github.com/wenzhongxu
+  CSDN: https://blog.csdn.net/xuwenzhong1994
+  博客园: https://www.cnblogs.com/wenzhong/
 
 
 # Social Links Icons
@@ -233,7 +236,7 @@ social_icons:
 
 # Sidebar Avatar
 # in directory: /assets/images/avatar.gif
-#avatar:
+avatar: /assets/images/avatar-wenzhong.jpg
 
 
 # Table Of Contents in the Sidebar
