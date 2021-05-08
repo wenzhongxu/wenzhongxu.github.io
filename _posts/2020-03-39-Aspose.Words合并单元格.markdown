@@ -11,6 +11,9 @@ tags:
     - 经验总结
 ---
 
+<!-- more -->
+生成Word文件时，如何在合并表格的单元格
+
 Aspose.Words.Tables.CellMerge有三个枚举值，用于合并单元格：
 ```C#
 namespace Aspose.Words.Tables

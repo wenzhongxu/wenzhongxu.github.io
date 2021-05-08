@@ -1,15 +1,15 @@
 # Wenzhong Blog
 
-> This is the blog of [Wenzhong's Blog](https://wenzhongxu.github.io)
-> Thanks the provider of the theme **[jekyll-theme-next](https://github.com/Simpleyyt/jekyll-theme-next)**
+> This is the blog of [Wenzhong's Blog](https://wenzhongxu.github.io){:target="_blank"}
+> Thanks the provider of the theme **[jekyll-theme-next](https://github.com/Simpleyyt/jekyll-theme-next){:target="_blank"}**
 
 ### 搭建指南
-具体搭建个人博客的过程可参考[NexT主题](http://theme-next.simpleyyt.com/)的文档
+具体搭建个人博客的过程可参考[NexT主题](http://theme-next.simpleyyt.com/){:target="_blank"}的文档
 
 ### 可能遇到的问题
 1. 本地运行网站时，报You have already activated X, but your Gemfile requires Y的错误时，一般是安装的依赖包版本不对，可以删除Gemfile.lock文件，重新执行 bundle install
 
-2. 本地运行网站时，打开中文文件名的博客，出现404时，是因为Jekyll无法正常解析中文文件名。可参考[解决方案](https://blog.csdn.net/yinaoxiong/article/details/54025482?utm_medium=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.baidujs&dist_request_id=&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.baidujs)。即 修改安装目录\Ruby22-x64\lib\ruby\2.2.0\webrick\httpservlet下的filehandler.rb文件
+2. 本地运行网站时，打开中文文件名的博客，出现404时，是因为Jekyll无法正常解析中文文件名。可参考[解决方案](https://blog.csdn.net/yinaoxiong/article/details/54025482?utm_medium=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.baidujs&dist_request_id=&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7EBlogCommendFromMachineLearnPai2%7Edefault-1.baidujs){:target="_blank"}。即 修改安装目录\Ruby22-x64\lib\ruby\2.2.0\webrick\httpservlet下的filehandler.rb文件
 找到下列两处，添加一句（+的一行为添加部分）
     ```shell
     path = req.path_info.dup.force_encoding(Encoding.find("filesystem"))
