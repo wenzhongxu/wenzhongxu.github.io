@@ -444,6 +444,7 @@ gitalk:
   repo: wenzhongxu.github.io
   owner: wenzhongxu
   admin: wenzhongxu
+  id: md5(location.pathname)
 
 # Baidu Share
 # Available value:
