@@ -1,0 +1,112 @@
+---
+layout:     post
+title:      ".net5基于Quartz实现任务调度"
+categories: .NET
+date:       2021-06-20 11:20:00
+author:     "WenzhongXu"
+tags:
+    - C#
+---
+
+<!-- more -->
+参考Quartz的例子，在.net5下基于Quartz实现一个简单的任务调度
+
+### 安装Quzrtz
+NuGet或者压缩包下载
+
+### 创建任务中心
+> 参考Quartz官方例子，实现一个简单的打印任务
+
+1. 创建ScheduleManager类，实现任务调度中心
+2. 仿照官方例子，补充任务代码
+```C#
+    /// <summary>
+    /// 任务调度中心 单例模式
+    /// </summary>
+    public class SchedulerManager
+    {
+        /// <summary>
+        /// 开启调度器
+        /// </summary>
+        /// <returns></returns>
+        public async Task StartScheduleAsync()
+        {
+            // grab instance
+            StdSchedulerFactory factory = new();
+            IScheduler scheduler = await factory.GetScheduler();
+
+            // start it
+            await scheduler.Start();
+
+            // define the job and tie it to HelloJob
+            IJobDetail job = JobBuilder.Create<HelloJob>()
+                .WithIdentity("job1", "group1")
+                .Build();
+
+            // trigger the job to run now
+            ITrigger trigger = TriggerBuilder.Create()
+                .WithIdentity("trigger", "group1")
+                .StartNow()
+                .WithSimpleSchedule(x => x
+                .WithIntervalInSeconds(10)
+                .RepeatForever())
+                .Build();
+
+            // schedule the job using this trigger
+            await scheduler.ScheduleJob(job, trigger);
+
+            await Task.Delay(TimeSpan.FromSeconds(60));
+
+            Console.Write("shutdown...");
+            await scheduler.Shutdown();
+
+            Console.WriteLine("Press any key to close the application");
+            Console.ReadKey();
+        }
+
+    }
+
+    //任务业务逻辑，实现IJob的Execute方法
+    public class HelloJob : IJob
+    {
+        public async Task Execute(IJobExecutionContext context)
+        {
+            await Console.Out.WriteLineAsync("Greeting from HelloJob!");
+        }
+    }
+```
+
+### 注册任务
+> 已经实现了任务的业务逻辑，如何在项目启动时，自动调用任务呢？
+#### 注入任务服务
+1. 创建HostedService的任务服务，继承IHostedService接口
+2. 实现StartAsync和StopAsync方法，实现我们自定义的任务调用
+```C#
+    public class HostedService : IHostedService
+    {
+        private readonly SchedulerManager _schedulerManager;
+
+        public HostedService(SchedulerManager schedulerManager)
+        {
+            _schedulerManager = schedulerManager ?? throw new ArgumentNullException(nameof(schedulerManager));
+        }
+
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            await _schedulerManager.StartScheduleAsync();
+        }
+
+        public async Task StopAsync(CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+        }
+    }
+```
+3. 在StartUp中，注册我们的任务中心和任务服务
+```C#
+    services.AddHostedService<HostedService>(); // 注册到hosted
+    services.AddSingleton<SchedulerManager>(); // 单例模式
+```
+
+### 运行结果
+![HelloJob](/img/dotNet/HelloJob.png)
