@@ -78,6 +78,7 @@ NuGet或者压缩包下载
 
 ### 注册任务
 > 已经实现了任务的业务逻辑，如何在项目启动时，自动调用任务呢？
+
 #### 注入任务服务
 1. 创建HostedService的任务服务，继承IHostedService接口
 2. 实现StartAsync和StopAsync方法，实现我们自定义的任务调用
@@ -102,6 +103,7 @@ NuGet或者压缩包下载
         }
     }
 ```
+
 3. 在StartUp中，注册我们的任务中心和任务服务
 ```C#
     services.AddHostedService<HostedService>(); // 注册到hosted
