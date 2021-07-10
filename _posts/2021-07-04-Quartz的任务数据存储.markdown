@@ -1,0 +1,64 @@
+---
+title:      "Quartz的两种任务数据存储方式"
+categories: .NET
+date:       2021-07-04 10:40:00
+author:     "WenzhongXu"
+tags:
+    - C#
+---
+
+<!-- more -->
+Quartz提供的两种任务数据存储方式，一种内存上，一种数据库存储
+
+### Job Stores
+JobStore负责跟踪提供给调度程序的所有“工作数据”：作业、触发器、日历等。为调度程序选择合适的IJobStore实现是很重要的。我们可以在用于生成调度程序实例的SchedulerFactory的属性文件中声明调度程序应该使用哪种JobStore。
+
+##### tips
+> 切勿直接在代码中使用JobStore实例，必须通过配置来确定quartz使用哪个JobStore，应该只在代码中使用Scheduler接口
+
+
+### RAMJobStore
+**优点：** 使用简单、性能最高
+**缺点：** 所有数据保存RAM中，当程序重启或崩溃时，所有调度信息会丢失
+
+下面是一种使用StdSchedulerFactory创建RAMJobStore的方式：
+```C#
+        /// <summary>
+        /// 开启调度器
+        /// </summary>
+        /// <returns></returns>
+        public async Task StartScheduleAsync()
+        {
+            // grab instance
+            StdSchedulerFactory factory = new();
+            IScheduler scheduler = await factory.GetScheduler();
+
+            // start it
+            await scheduler.Start();
+
+            // define the job and tie it to HelloJob
+            IJobDetail job = JobBuilder.Create<HelloJob>()
+                .WithIdentity("job1", "group1")
+                .Build();
+
+            // trigger the job to run now
+            ITrigger trigger = TriggerBuilder.Create()
+                .WithIdentity("trigger", "group1")
+                .StartNow()
+                .WithSimpleSchedule(x => x
+                .WithIntervalInSeconds(10)
+                .RepeatForever())
+                .Build();
+
+            // schedule the job using this trigger
+            await scheduler.ScheduleJob(job, trigger);
+
+            await Task.Delay(TimeSpan.FromSeconds(60));
+
+            Console.Write("shutdown...");
+            await scheduler.Shutdown();
+
+            Console.WriteLine("Press any key to close the application");
+            Console.ReadKey();
+        }
+```
