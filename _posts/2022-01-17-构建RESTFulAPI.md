@@ -10,7 +10,6 @@ tags:
 <!-- more -->
 根据杨旭老师的[ASP.NET Core 3.x 构建 RESTful API](https://www.bilibili.com/video/BV1XJ411q7yy)学习笔记
 
-## RESTFul API
 ### REST
 REST即Representational State Transfer（状态表述转换）。描述了Web应用到底是怎样的设计才算是优良的。定义了如下三点：
 - 一组网页的网络（一个虚拟状态机）
@@ -70,14 +69,14 @@ REST风格的API是一套约束规范，是一种架构风格。需要使用一�
 GET api/users/totalamounttouser
 
 ### HTTP方法
-HTTP方法|请求参数(Payload)|参数位置|URI|请求前|请求后|响应内容 
-:-:|:- |-: |:- |-:|-:|:-
-GET|查询参数|可含查询字符串(Query String)|/api/companies/{companyId}  /api/companies|无修改|无修改|单个资源 多个资源的集合    
-POST|要创建的单个资源|Body|/api/companies|null|{a:1}|新创建的单个资源
-PATCH|待修改资源的jsonPathDocument|Body|/api/companies/{companyId}|{a:1,b:2}|{a:1,b:3}|无需返回
-PUT|要替换的单个资源信息|Body|/api/companies/{companyId}|{a:1,b:2}|{a:2,b:3}|无需返回
-PUT|要创建的单个资源|Body|/api/companies/{companyId}|null|{a:2,b:3}|返回新创建的资源
-DELETE|无|可含查询字符串(Query String)|/api/companies/{companyId}|{a:1},{b:2}|{a:1}|无需返回
+|HTTP方法|请求参数(Payload)|参数位置|URI|请求前|请求后|响应内容 |
+|:-:|:- |-:|:- |-:|-:|:-|
+|GET|查询参数|可含查询字符串(Query String)|/api/companies/{companyId}  /api/companies|无修改|无修改|单个资源 多个资源的集合  |  
+|POST|要创建的单个资源|Body|/api/companies|null|{a:1}|新创建的单个资源|
+|PATCH|待修改资源的jsonPathDocument|Body|/api/companies/{companyId}|{a:1,b:2}|{a:1,b:3}|无需返回|
+|PUT|要替换的单个资源信息|Body|/api/companies/{companyId}|{a:1,b:2}|{a:2,b:3}|无需返回|
+|PUT|要创建的单个资源|Body|/api/companies/{companyId}|null|{a:2,b:3}|返回新创建的资源|
+|DELETE|无|可含查询字符串(Query String)|/api/companies/{companyId}|{a:1},{b:2}|{a:1}|无需返回|
 
 ### 状态码
 #### 1xx
@@ -118,3 +117,22 @@ DELETE|无|可含查询字符串(Query String)|/api/companies/{companyId}|{a:1},
 - HTTP 5xx错误
 - 会对API整体的可用性造成影响
 
+### 内容协商
+针对一个响应，当有多种表述格式可用的时候，选取一个最佳的表述
+
+##### Accept Header
+- Media Type（媒体类型）
+    - application/json
+    - application/xml
+    - ...
+- 406 Not Acceptable
+- 输出格式
+- ASP.NET5里面对应的就是Output Formatters
+
+##### Content-Type Header
+- Media Type（媒体类型）
+    - application/json
+    - application/xml
+    - ...
+- 输入格式
+- ASP.NET5里面对应的就是Input Formatters
