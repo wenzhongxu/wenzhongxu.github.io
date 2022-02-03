@@ -69,14 +69,15 @@ REST风格的API是一套约束规范，是一种架构风格。需要使用一�
 GET api/users/totalamounttouser
 
 ### HTTP方法
-|HTTP方法|请求参数(Payload)|参数位置|URI|请求前|请求后|响应内容 |
-|:-:|:- |-:|:- |-:|-:|:-|
-|GET|查询参数|可含查询字符串(Query String)|/api/companies/{companyId}  /api/companies|无修改|无修改|单个资源 多个资源的集合  |  
+|HTTP方法|请求参数(Payload)|参数位置|URI|请求前|请求后|响应内容|
+:-:|:-|-:|:-|-:|-:|:-
+|GET|查询参数|可含查询字符串(Query String)|/api/companies/{companyId}  /api/companies|无修改|无修改|单个资源 多个资源的集合|  
 |POST|要创建的单个资源|Body|/api/companies|null|{a:1}|新创建的单个资源|
 |PATCH|待修改资源的jsonPathDocument|Body|/api/companies/{companyId}|{a:1,b:2}|{a:1,b:3}|无需返回|
 |PUT|要替换的单个资源信息|Body|/api/companies/{companyId}|{a:1,b:2}|{a:2,b:3}|无需返回|
 |PUT|要创建的单个资源|Body|/api/companies/{companyId}|null|{a:2,b:3}|返回新创建的资源|
 |DELETE|无|可含查询字符串(Query String)|/api/companies/{companyId}|{a:1},{b:2}|{a:1}|无需返回|
+|HEAD|查询参数|可含查询字符串(Query string)|api/companies/{companyId}  /api/companies|无修改|无修改|不返回响应的Body，用来在资源上获取一些信息|  
 
 ### 状态码
 #### 1xx
@@ -136,3 +137,89 @@ GET api/users/totalamounttouser
     - ...
 - 输入格式
 - ASP.NET5里面对应的就是Input Formatters
+
+
+### Entity Model和面向外部的Model
+#### Entity Model
+Entity Framework Core 使用的 Entity Model 是用来表示数据库里面的记录的
+
+#### 面向外部的Model
+表示要传输的东西，这类model有时候叫Dto，有时候又叫ViewModel
+
+#### 对比
+```C#
+public class Person
+{
+    public Guid Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public DateTimeOffset DateOfBirth { get; set; }
+}
+
+public class PersonDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; }
+    public int Age { get; set; }
+    public decimal Salary { get; set; }
+}
+```
+
+#### 两者应该分开
+为了程序更加健壮、可靠和更易于进化
+
+### 过滤和搜索
+#### 如何给API传递数据
+- 数据可以通过各种方式来传给API
+- Binding source Attributes 会告诉 Model 的绑定引擎从哪里找到绑定源
+    - [FromBody],请求的Body
+    - [FromForm],请求的Body中的form数据
+    - [FromHeader],请求的Header
+    - [FromQuery],Query string参数
+    - [FromRoute],当前请求中的路由数据
+    - [FromService],作为Action参数而注入的服务
+
+例如：
+```C#
+public async Task<ActionResult<CompanyDto>> GetCompany([FromRoute]Guid companyId)
+
+public async Task<ActionResult<CompanyDto>> GetCompany([FromQuery]Guid companyId)
+```
+
+#### [ApiController]
+- 默认情况下 ASP .NET Core 会使用 Complex Object Model Binder，它会把数据从Value Providers那里提取出来，而Value Providers的顺序是定义好的。
+- 但是我们构建API时通常会使用 [ApiController] 这个属性，为了更好的适应API它改变了上面的规则。
+    - [FromBody],通常用来推断复杂类型参数的
+    - [FromForm],通常用来推断IFormFile和IFormFileCollection类型的Action参数
+    - [FromRoute],用来推断Action的参数名和路由模板中的参数名一致的情况
+    - [FromQuery],用来推断其他的Action参数
+
+#### 过滤
+- 过滤集合的意思是根据指定条件限定返回的集合
+- 例如返回所有类型为国有企业的欧洲公司。URI为： GET /api/companies?type=State-owned&region=Europe
+- 所以过滤就是指：我们把某个字段的名字以及想要让该字段匹配的值一起传递给API，并将这些作为返回的集合的一部分
+
+#### 搜索
+- 针对集合进行搜索是指根据预定义的一些规则，把符合条件的数据添加到集合里面
+- 搜索实际上超出了过滤的范围。针对搜索，通常不会把要匹配的字段名传递过去，通常会把要搜索的值传递给API，然后API自行决定应该对哪些字段来查找该值。经常会是全文搜索。
+- 例如： GET /api/companies?q=xxx
+
+#### 比较
+过滤：首先是一个完整集合，然后根据条件把匹配或不匹配的数据项移除
+搜索：首先是一个空集合，然后根据条件把匹配或不匹配的数据项往里面添加。
+
+#### 注意
+- 过滤和搜索这些参数并不是资源的一部分
+- 只允许针对资源的字段进行过滤
+
+### 安全性和幂等性
+- 安全性是指方法执行后并不会改变资源的表述
+- 幂等性是指方法无论执行多少次都会得到同样的结果
+
+|HTTP方法|安全？|幂等？|
+:-:|:-:|:-:
+|GET|是|是|
+|OPTIONS|是|是|
+|HEAD|是|是|
+|POST|否|否|
+|DELETE|否|是|
