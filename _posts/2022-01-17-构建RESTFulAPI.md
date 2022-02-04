@@ -70,7 +70,7 @@ GET api/users/totalamounttouser
 
 ### HTTP方法
 |HTTP方法|请求参数(Payload)|参数位置|URI|请求前|请求后|响应内容|
-:-:|:-|-:|:-|-:|-:|:-
+:-:|:-:|:-:|:-:|:-:|:-:|:-:
 |GET|查询参数|可含查询字符串(Query String)|/api/companies/{companyId}  /api/companies|无修改|无修改|单个资源 多个资源的集合|  
 |POST|要创建的单个资源|Body|/api/companies|null|{a:1}|新创建的单个资源|
 |PATCH|待修改资源的jsonPathDocument|Body|/api/companies/{companyId}|{a:1,b:2}|{a:1,b:3}|无需返回|
