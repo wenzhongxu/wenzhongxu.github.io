@@ -138,6 +138,38 @@ GET api/users/totalamounttouser
 - 输入格式
 - ASP.NET5里面对应的就是Input Formatters
 
+##### 代码示例
+```C#
+//方法一 返回406
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddControllers(setup =>
+    {
+        setup.ReturnHttpNotAcceptable = true; //如果请求的类型和服务器所支持的类型不一致时，返回406
+    });
+}
+
+//方法二 支持xml内容，支持输入和输出
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddControllers(setup =>
+    {
+        setup.ReturnHttpNotAcceptable = true;
+    })
+    .AddXmlDataContractSerializerFormatters(); //添加xml格式化器。支持输入和输出;
+}
+
+//方法三 修改默认的格式，在第0位置上新增支持格式
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddControllers(setup =>
+    {
+        setup.ReturnHttpNotAcceptable = true; //如果请求的类型和服务器所支持的类型不一致时，返回406
+        setup.OutputFormatters.Insert(0, new XmlDataContractSerializerOutputFormatter());
+    });
+}
+```
+
 
 ### Entity Model和面向外部的Model
 #### Entity Model
