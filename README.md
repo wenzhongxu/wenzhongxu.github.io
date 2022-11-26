@@ -6,6 +6,25 @@
 ### 搭建指南
 具体搭建个人博客的过程可参考<a href="http://theme-next.simpleyyt.com/">NexT主题</a>的文档
 
+### 本地运行
+#### 安装ruby
+1. 下载[ruby](https://rubyinstaller.org/downloads/)并安装
+    ![ruby-installed](/img/tools/ruby-jekyll/ruby-installed.png)
+
+2. 安装jekyll
+    ```shell
+    gem install jekyll bundler
+    ```
+
+3. 进入.github.io目录
+    ```shell
+    bundle install # 安装依赖
+    bundle exec jekyll serve # 启动服务
+    ```
+    ![server-start](/img/tools/ruby-jekyll/server-start.png)
+
+
+
 ### 可能遇到的问题
 1. 本地运行网站时，报You have already activated X, but your Gemfile requires Y的错误时，一般是安装的依赖包版本不对，可以删除Gemfile.lock文件，重新执行 bundle install
 
@@ -20,4 +39,10 @@
     break if base == "/"
     + base.force_encoding("UTF-8") #加入編碼
     break unless File.directory?(File.expand_path(res.filename + base))
+    ```
+
+3. 本地运行网站时，如果ruby的版本高于3.0.0，启动服务失败，则需要添加webrick依赖
+    ![serve-error-start](/img/tools/ruby-jekyll/serve-error-start.png)
+    ```shell
+    bundle add webrick
     ```
